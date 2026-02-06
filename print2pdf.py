@@ -12,6 +12,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 HOMEPAGE = "https://www.dse.co.tz/"
 TODAY = datetime.date.today().strftime("%Y-%m-%d")
 PDF_FILENAME = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.pdf"
+PDF_TEMP = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.tmp.pdf"
 DEBUG_SCREENSHOT = OUTPUT_DIR / f"debug_{TODAY}.png"
 
 
@@ -115,7 +116,7 @@ def fetch_latest_dse_report():
 
             print("Step 5: Generating PDF...")
             report_page.pdf(
-                path=str(PDF_FILENAME),
+                path=str(PDF_TEMP),
                 format="A4",
                 landscape=True,
                 print_background=True,
@@ -123,11 +124,14 @@ def fetch_latest_dse_report():
                 scale=0.88,
             )
 
-            size = PDF_FILENAME.stat().st_size
+            size = PDF_TEMP.stat().st_size
             if size < 5000:
                 print(f"  WARNING: PDF is only {size} bytes — may be empty.")
+                PDF_TEMP.unlink(missing_ok=True)
                 return False
 
+            # Atomic replace: temp -> final (overwrites even if locked)
+            PDF_TEMP.replace(PDF_FILENAME)
             print(f"Success! PDF saved -> {PDF_FILENAME} ({size:,} bytes)")
             return True
 
