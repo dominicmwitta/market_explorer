@@ -20,7 +20,12 @@ env/
 
 # Output files
 *.csv
+dse_reports/
+reports/
 
 # Logs
 logs/
 *.log
+
+# Misc
+nul
