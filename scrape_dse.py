@@ -13,50 +13,56 @@ from dse_scraper import (
     create_dataframe,
 )
 from dse_scraper.scraper import close_browser
+from dse_scraper.logger import get_logger
 
 OUTPUT_FILE = 'dse_equity_daily.csv'
+log = get_logger()
 
 
 def scrape_report(url):
     """Scrape a single report and return DataFrame."""
-    print(f"  Fetching: {url[:60]}...")
+    log.debug(f"Fetching: {url}")
 
     report_date = extract_report_date(url)
     raw_rows = extract_equity_data(url)
 
     if not raw_rows:
-        print(f"    No data found")
+        log.warning(f"No data found for {url[:60]}")
         return None
 
     dedup_rows = deduplicate_rows(raw_rows)
     parsed_rows = [parse_equity_row(r) for r in dedup_rows if parse_equity_row(r)['numbers']]
     df = create_dataframe(parsed_rows, report_date)
 
-    print(f"    Found {len(df)} companies for {report_date}")
+    log.info(f"Extracted {len(df)} companies for {report_date}")
     return df
 
 
 def main():
+    log.info("=" * 60)
+    log.info("DSE Scraper Started")
+    log.info("=" * 60)
+
     try:
-        print("Fetching DSE homepage...")
+        log.info("Fetching DSE homepage...")
         soup = get_homepage()
 
         if not soup:
-            print("Failed to fetch DSE homepage")
+            log.error("Failed to fetch DSE homepage")
             return
 
         urls = find_daily_report_urls(soup)
 
         if not urls:
-            print("No daily report URLs found")
+            log.error("No daily report URLs found")
             return
 
-        print(f"Found {len(urls)} daily reports\n")
+        log.info(f"Found {len(urls)} daily reports")
 
         # Load existing data if file exists
         if os.path.exists(OUTPUT_FILE):
             existing_df = pd.read_csv(OUTPUT_FILE)
-            print(f"Loaded {len(existing_df)} existing rows from {OUTPUT_FILE}")
+            log.info(f"Loaded {len(existing_df)} existing rows from {OUTPUT_FILE}")
         else:
             existing_df = pd.DataFrame()
 
@@ -64,33 +70,42 @@ def main():
         all_dfs = [existing_df] if not existing_df.empty else []
 
         for i, url in enumerate(urls, 1):
-            print(f"[{i}/{len(urls)}]", end="")
+            log.info(f"[{i}/{len(urls)}] Processing report...")
             df = scrape_report(url)
             if df is not None and not df.empty:
                 all_dfs.append(df)
 
         if not all_dfs:
-            print("\nNo data scraped")
+            log.warning("No data scraped")
             return
 
         # Merge all DataFrames
         merged_df = pd.concat(all_dfs, ignore_index=True)
-        print(f"\nTotal rows before deduplication: {len(merged_df)}")
+        log.info(f"Total rows before deduplication: {len(merged_df)}")
 
         # Remove duplicates based on Date + Company
         merged_df = merged_df.drop_duplicates(subset=['Date', 'Company'], keep='last')
         merged_df = merged_df.sort_values(['Date', 'Company']).reset_index(drop=True)
 
-        print(f"Total rows after deduplication: {len(merged_df)}")
+        log.info(f"Total rows after deduplication: {len(merged_df)}")
 
         # Save to CSV
         merged_df.to_csv(OUTPUT_FILE, index=False)
-        print(f"\nSaved to {OUTPUT_FILE}")
+        log.info(f"Saved {len(merged_df)} rows to {OUTPUT_FILE}")
+
+        # Print summary to console
         print(merged_df.to_string())
+
+        log.info("DSE Scraper Completed Successfully")
+
+    except Exception as e:
+        log.exception(f"Scraper failed with error: {e}")
+        raise
 
     finally:
         # Always close browser to free resources
         close_browser()
+        log.debug("Browser closed")
 
 
 if __name__ == "__main__":

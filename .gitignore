@@ -20,3 +20,7 @@ env/
 
 # Output files
 *.csv
+
+# Logs
+logs/
+*.log

@@ -5,6 +5,7 @@ from .scraper import fetch_page, find_daily_report_urls, get_homepage
 from .parser import extract_equity_data, parse_equity_row, extract_report_date
 from .data import deduplicate_rows, create_dataframe, save_to_csv
 from .main import process_report, list_report_urls, main
+from .logger import get_logger
 
 __all__ = [
     # Config
@@ -28,4 +29,6 @@ __all__ = [
     'process_report',
     'list_report_urls',
     'main',
+    # Logger
+    'get_logger',
 ]

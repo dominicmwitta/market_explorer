@@ -5,13 +5,18 @@ import requests
 from bs4 import BeautifulSoup
 
 from .config import BASE_URL
+from .logger import get_logger
+
+log = get_logger()
 
 # Try to import Playwright for JavaScript rendering
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
+    log.debug("Playwright available")
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+    log.debug("Playwright not available, using requests only")
 
 # Module-level browser instance for reuse
 _browser = None
@@ -58,6 +63,7 @@ def fetch_page_playwright(url):
         if not browser:
             return None
 
+        log.debug(f"Playwright fetching: {url[:60]}...")
         page = browser.new_page()
         page.goto(url, wait_until='networkidle', timeout=30000)
 
@@ -68,10 +74,11 @@ def fetch_page_playwright(url):
         content = page.content()
         page.close()
 
+        log.debug(f"Playwright fetch successful: {len(content)} bytes")
         return BeautifulSoup(content, 'html.parser')
 
     except Exception as e:
-        print(f"Playwright error fetching {url}: {e}")
+        log.error(f"Playwright error fetching {url[:60]}: {e}")
         return None
 
 
@@ -85,13 +92,15 @@ def fetch_page_requests(url):
         BeautifulSoup object or None if request failed
     """
     try:
+        log.debug(f"Requests fetching: {url[:60]}...")
         response = requests.get(url, timeout=30)
         if response.status_code != 200:
-            print(f"Failed to fetch {url} with status code: {response.status_code}")
+            log.error(f"HTTP {response.status_code} for {url[:60]}")
             return None
+        log.debug(f"Requests fetch successful: {len(response.content)} bytes")
         return BeautifulSoup(response.content, 'html.parser')
     except Exception as e:
-        print(f"Requests error fetching {url}: {e}")
+        log.error(f"Requests error fetching {url[:60]}: {e}")
         return None
 
 
@@ -119,7 +128,7 @@ def fetch_page(url, use_playwright=None):
         result = fetch_page_playwright(url)
         if result:
             return result
-        print("Playwright failed, falling back to requests...")
+        log.warning("Playwright failed, falling back to requests...")
 
     return fetch_page_requests(url)
 
