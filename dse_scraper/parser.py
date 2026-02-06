@@ -2,18 +2,119 @@
 
 import re
 import datetime
+from bs4 import NavigableString, Tag
 
 from .config import COMPANY_NAMES
 from .scraper import fetch_page
 
 
+def parse_css_positions(soup):
+    """Extract CSS position values from stylesheets.
+
+    Parses margin-left and left properties to determine x-positions.
+
+    Returns:
+        Dict mapping class names to x-offset values
+    """
+    css_positions = {}
+
+    for style in soup.find_all('style'):
+        text = style.get_text()
+
+        # Parse margin-left values (used for span offsets)
+        for match in re.finditer(r'\.(_[a-z0-9]+)\s*\{\s*margin-left:\s*(-?[\d.]+)px', text, re.IGNORECASE):
+            css_positions[match.group(1)] = float(match.group(2))
+
+        # Parse left values (used for div base positions)
+        for match in re.finditer(r'\.(x[a-z0-9]+)\s*\{\s*left:\s*(-?[\d.]+)px', text, re.IGNORECASE):
+            css_positions[match.group(1)] = float(match.group(2))
+
+    return css_positions
+
+
+def extract_by_css_position(div, css_positions):
+    """Extract text fragments sorted by CSS x-position.
+
+    Fallback method when DOM order is randomized.
+
+    Args:
+        div: BeautifulSoup div element
+        css_positions: Dict of CSS class -> x-offset
+
+    Returns:
+        List of text tokens sorted by visual x-position
+    """
+    # Get div's base x position
+    div_classes = div.get('class', [])
+    base_x = 0
+    for cls in div_classes:
+        if cls.startswith('x') and cls in css_positions:
+            base_x = css_positions[cls]
+            break
+
+    # Extract fragments with their positions
+    fragments = []
+    current_offset = 0
+
+    for child in div.children:
+        if isinstance(child, NavigableString):
+            text = str(child).strip()
+            if text:
+                x_pos = base_x + current_offset
+                fragments.append((x_pos, text))
+        elif isinstance(child, Tag) and child.name == 'span':
+            # Get span's margin-left offset for next text
+            for cls in child.get('class', []):
+                if cls.startswith('_') and cls in css_positions:
+                    current_offset = css_positions[cls]
+                    break
+
+    # Sort by x position
+    fragments.sort(key=lambda x: x[0])
+
+    # Merge adjacent fragments and extract tokens
+    merged_text = ' '.join(text for _, text in fragments)
+    return merged_text.split()
+
+
+def validate_values(values, company):
+    """Check if extracted values look valid.
+
+    Returns True if values seem reasonable, False if suspicious.
+    """
+    if len(values) < 6:
+        return False
+
+    # Try to parse first few as prices
+    try:
+        prices = []
+        for v in values[:4]:
+            clean = v.replace(',', '')
+            prices.append(float(clean))
+
+        # Prices should be reasonable (1 to 100,000 TZS typically)
+        for p in prices:
+            if p < 0 or (p > 0 and p < 1) or p > 500000:
+                return False
+
+        # Opening and closing should be somewhat close (within 50%)
+        if prices[0] > 0 and prices[1] > 0:
+            ratio = max(prices[0], prices[1]) / min(prices[0], prices[1])
+            if ratio > 2:  # More than 100% difference is suspicious
+                return False
+
+    except (ValueError, ZeroDivisionError):
+        return False
+
+    return True
+
+
 def extract_equity_data(url):
     """Extract equity table from PDF-converted HTML.
 
-    The HTML uses CSS positioning and spans to fragment numbers as anti-scraping.
-    Example: "1<span>1,1<span>10" visually renders as "11,110"
-
-    Solution: Use get_text() which combines fragments correctly, then split on whitespace.
+    Uses two strategies to handle anti-scraping CSS techniques:
+    1. Primary: get_text() which combines fragments in DOM order
+    2. Fallback: Parse CSS positions and sort fragments by x-coordinate
 
     Args:
         url: URL of the daily report page
@@ -25,35 +126,51 @@ def extract_equity_data(url):
     if not soup:
         return []
 
+    # Pre-parse CSS positions for fallback method
+    css_positions = parse_css_positions(soup)
+
     # Find all divs with class containing 't' (text rows)
     text_divs = soup.find_all('div', class_=lambda x: x and 't' in x.split() if x else False)
 
     all_rows = []
     for div in text_divs:
-        # Use get_text() to properly combine fragmented text
+        # Primary method: Use get_text() to combine fragmented text
         full_text = div.get_text()
-
-        # Split on whitespace to get tokens
         tokens = full_text.split()
 
         if not tokens:
             continue
 
-        # First token should be company name
         first_token = tokens[0]
 
         for company in COMPANY_NAMES:
             if first_token == company:
-                # Get remaining tokens as potential values
                 value_tokens = tokens[1:]
 
-                # Filter to only numeric values (integers with commas or decimals)
+                # Filter to only numeric values
                 numeric_values = []
                 for v in value_tokens:
                     v = v.strip()
-                    # Match: digits with optional commas and optional decimal part
                     if v and re.match(r'^[\d,]+(\.\d+)?$', v):
                         numeric_values.append(v)
+
+                # Validate results - if suspicious, try CSS position fallback
+                if not validate_values(numeric_values, company) and css_positions:
+                    # Fallback: extract by CSS x-position
+                    css_tokens = extract_by_css_position(div, css_positions)
+
+                    if css_tokens and css_tokens[0] == company:
+                        css_value_tokens = css_tokens[1:]
+                        css_numeric = []
+                        for v in css_value_tokens:
+                            v = v.strip()
+                            if v and re.match(r'^[\d,]+(\.\d+)?$', v):
+                                css_numeric.append(v)
+
+                        # Use CSS method if it gives better results
+                        if validate_values(css_numeric, company):
+                            numeric_values = css_numeric
+                            full_text = ' '.join(css_tokens)
 
                 if numeric_values:
                     raw_text = full_text.strip()
