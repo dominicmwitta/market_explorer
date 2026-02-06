@@ -12,6 +12,7 @@ from dse_scraper import (
     deduplicate_rows,
     create_dataframe,
 )
+from dse_scraper.scraper import close_browser
 
 OUTPUT_FILE = 'dse_equity_daily.csv'
 
@@ -36,55 +37,60 @@ def scrape_report(url):
 
 
 def main():
-    print("Fetching DSE homepage...")
-    soup = get_homepage()
+    try:
+        print("Fetching DSE homepage...")
+        soup = get_homepage()
 
-    if not soup:
-        print("Failed to fetch DSE homepage")
-        return
+        if not soup:
+            print("Failed to fetch DSE homepage")
+            return
 
-    urls = find_daily_report_urls(soup)
+        urls = find_daily_report_urls(soup)
 
-    if not urls:
-        print("No daily report URLs found")
-        return
+        if not urls:
+            print("No daily report URLs found")
+            return
 
-    print(f"Found {len(urls)} daily reports\n")
+        print(f"Found {len(urls)} daily reports\n")
 
-    # Load existing data if file exists
-    if os.path.exists(OUTPUT_FILE):
-        existing_df = pd.read_csv(OUTPUT_FILE)
-        print(f"Loaded {len(existing_df)} existing rows from {OUTPUT_FILE}")
-    else:
-        existing_df = pd.DataFrame()
+        # Load existing data if file exists
+        if os.path.exists(OUTPUT_FILE):
+            existing_df = pd.read_csv(OUTPUT_FILE)
+            print(f"Loaded {len(existing_df)} existing rows from {OUTPUT_FILE}")
+        else:
+            existing_df = pd.DataFrame()
 
-    # Scrape all reports
-    all_dfs = [existing_df] if not existing_df.empty else []
+        # Scrape all reports
+        all_dfs = [existing_df] if not existing_df.empty else []
 
-    for i, url in enumerate(urls, 1):
-        print(f"[{i}/{len(urls)}]", end="")
-        df = scrape_report(url)
-        if df is not None and not df.empty:
-            all_dfs.append(df)
+        for i, url in enumerate(urls, 1):
+            print(f"[{i}/{len(urls)}]", end="")
+            df = scrape_report(url)
+            if df is not None and not df.empty:
+                all_dfs.append(df)
 
-    if not all_dfs:
-        print("\nNo data scraped")
-        return
+        if not all_dfs:
+            print("\nNo data scraped")
+            return
 
-    # Merge all DataFrames
-    merged_df = pd.concat(all_dfs, ignore_index=True)
-    print(f"\nTotal rows before deduplication: {len(merged_df)}")
+        # Merge all DataFrames
+        merged_df = pd.concat(all_dfs, ignore_index=True)
+        print(f"\nTotal rows before deduplication: {len(merged_df)}")
 
-    # Remove duplicates based on Date + Company
-    merged_df = merged_df.drop_duplicates(subset=['Date', 'Company'], keep='last')
-    merged_df = merged_df.sort_values(['Date', 'Company']).reset_index(drop=True)
+        # Remove duplicates based on Date + Company
+        merged_df = merged_df.drop_duplicates(subset=['Date', 'Company'], keep='last')
+        merged_df = merged_df.sort_values(['Date', 'Company']).reset_index(drop=True)
 
-    print(f"Total rows after deduplication: {len(merged_df)}")
+        print(f"Total rows after deduplication: {len(merged_df)}")
 
-    # Save to CSV
-    merged_df.to_csv(OUTPUT_FILE, index=False)
-    print(f"\nSaved to {OUTPUT_FILE}")
-    print(merged_df.to_string())
+        # Save to CSV
+        merged_df.to_csv(OUTPUT_FILE, index=False)
+        print(f"\nSaved to {OUTPUT_FILE}")
+        print(merged_df.to_string())
+
+    finally:
+        # Always close browser to free resources
+        close_browser()
 
 
 if __name__ == "__main__":
