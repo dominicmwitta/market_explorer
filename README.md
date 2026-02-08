@@ -58,7 +58,7 @@ pip uninstall dse-explorer
 
 ## Usage
 
-After installation, six CLI commands are available:
+After installation, seven CLI commands are available:
 
 ### dse-scrape
 
@@ -138,6 +138,19 @@ dse-dashboard
 
 Opens in your browser at `http://localhost:8501`.
 
+### dse-create-shortcuts
+
+Create Windows desktop shortcuts for quick access to the Dashboard and Scraper.
+
+```bash
+dse-create-shortcuts
+```
+
+This places two shortcuts on your Desktop:
+
+- **DSE Dashboard** - launches the Streamlit dashboard
+- **DSE Scraper** - runs the market data scraper
+
 ## Project structure
 
 ```
@@ -156,6 +169,7 @@ market_explorer/
     pdf_extract.py        # PDF-to-CSV extractor
     analyzer.py           # Stock performance analysis
     dashboard.py          # Streamlit interactive dashboard
+    shortcuts.py          # Windows desktop shortcut creator
     logger.py             # Logging configuration
 ```
 
