@@ -25,7 +25,7 @@ st.set_page_config(
 def load_data(csv_path: str = "dse_equity_daily.csv") -> pd.DataFrame:
     """Load and preprocess stock data."""
     df = pd.read_csv(csv_path)
-    df['Date'] = pd.to_datetime(df['Date'], format='%d-%B-%Y')
+    df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
     df = df.sort_values(['Company', 'Date'])
     return df
 
@@ -396,8 +396,8 @@ def main():
                 go.Candlestick(
                     x=s1_data['Date'],
                     open=s1_data['Opening_Price'],
-                    high=s1_data['High'].replace(0, s1_data['Closing_Price']),
-                    low=s1_data['Low'].replace(0, s1_data['Closing_Price']),
+                    high=s1_data['High'].where(s1_data['High'] != 0, s1_data['Closing_Price']),
+                    low=s1_data['Low'].where(s1_data['Low'] != 0, s1_data['Closing_Price']),
                     close=s1_data['Closing_Price'],
                     name=stock1
                 ),
@@ -408,8 +408,8 @@ def main():
                 go.Candlestick(
                     x=s2_data['Date'],
                     open=s2_data['Opening_Price'],
-                    high=s2_data['High'].replace(0, s2_data['Closing_Price']),
-                    low=s2_data['Low'].replace(0, s2_data['Closing_Price']),
+                    high=s2_data['High'].where(s2_data['High'] != 0, s2_data['Closing_Price']),
+                    low=s2_data['Low'].where(s2_data['Low'] != 0, s2_data['Closing_Price']),
                     close=s2_data['Closing_Price'],
                     name=stock2
                 ),

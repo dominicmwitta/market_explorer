@@ -26,7 +26,7 @@ class StockAnalyzer:
         self.df = pd.read_csv(self.csv_path)
 
         # Parse dates
-        self.df['Date'] = pd.to_datetime(self.df['Date'], format='%d-%B-%Y')
+        self.df['Date'] = pd.to_datetime(self.df['Date'], format='%Y-%m-%d')
         self.df = self.df.sort_values(['Company', 'Date'])
 
         # Convert numeric columns

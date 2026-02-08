@@ -342,16 +342,17 @@ def extract_report_date(url):
         url: URL of the daily report page
 
     Returns:
-        Date string in format 'DD-Month-YYYY'
+        Date string in ISO format 'YYYY-MM-DD'
     """
     soup = fetch_page(url)
     if not soup:
-        return datetime.datetime.now().strftime('%d-%B-%Y')
+        return datetime.datetime.now().strftime('%Y-%m-%d')
 
     text = soup.get_text()
-    date_match = re.search(r'DATE:\s*(\d{1,2}[-/]\w+[-/]\d{4})', text)
+    date_match = re.search(r'DATE:\s*(\d{1,2})[-/](\w+)[-/](\d{4})', text)
     if date_match:
-        return date_match.group(1)
+        day, month, year = date_match.group(1), date_match.group(2), date_match.group(3)
+        return datetime.datetime.strptime(f"{day}-{month}-{year}", '%d-%B-%Y').strftime('%Y-%m-%d')
 
     # Alternative: look for month names
     months = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -360,6 +361,7 @@ def extract_report_date(url):
         pattern = rf'(\d{{1,2}})[^\d]*{month}[^\d]*(\d{{4}})'
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            return f"{match.group(1)}-{month}-{match.group(2)}"
+            day, year = match.group(1), match.group(2)
+            return datetime.datetime.strptime(f"{day}-{month}-{year}", '%d-%B-%Y').strftime('%Y-%m-%d')
 
-    return datetime.datetime.now().strftime('%d-%B-%Y')
+    return datetime.datetime.now().strftime('%Y-%m-%d')
