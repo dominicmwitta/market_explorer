@@ -330,6 +330,181 @@ class StockAnalyzer:
 
         return report_text
 
+    def generate_report_markdown(self) -> str:
+        """Generate the analytical report formatted as Markdown."""
+        metrics = self.calculate_metrics()
+
+        date_min = self.df['Date'].min().strftime('%d-%b-%Y')
+        date_max = self.df['Date'].max().strftime('%d-%b-%Y')
+        total_days = self.df['Date'].nunique()
+
+        r = []
+        r.append("# DSE Stock Performance Analysis Report")
+        r.append(f"**Generated:** {self.analysis_date}  ")
+        r.append(f"**Data Period:** {date_min} to {date_max} ({total_days} trading days)  ")
+        r.append(f"**Total Stocks Analyzed:** {len(metrics)}")
+
+        # Market Overview
+        gainers = (metrics['Total_Return_Pct'] > 0).sum()
+        losers = (metrics['Total_Return_Pct'] < 0).sum()
+        unchanged = (metrics['Total_Return_Pct'] == 0).sum()
+        avg_market_return = metrics['Total_Return_Pct'].mean()
+        total_market_turnover = metrics['Total_Turnover'].sum()
+
+        r.append("\n## Market Overview")
+        r.append(f"| Metric | Value |")
+        r.append(f"|--------|-------|")
+        r.append(f"| Gainers | {gainers} stocks |")
+        r.append(f"| Losers | {losers} stocks |")
+        r.append(f"| Unchanged | {unchanged} stocks |")
+        r.append(f"| Avg Market Return | {avg_market_return:.2f}% |")
+        r.append(f"| Total Market Turnover | TZS {total_market_turnover:,.0f} |")
+
+        # Helper for ranked tables
+        def _ranked_table(title, headers, rows):
+            r.append(f"\n## {title}")
+            r.append("| " + " | ".join(headers) + " |")
+            r.append("| " + " | ".join(["---"] * len(headers)) + " |")
+            for row in rows:
+                r.append("| " + " | ".join(str(v) for v in row) + " |")
+
+        # Top Performers
+        top_returns = self.get_top_performers(metrics, 'Total_Return_Pct', 10)
+        _ranked_table(
+            "Top 10 Best Performers (By Total Return)",
+            ["Rank", "Company", "Return %", "Price (TZS)", "Volatility %", "Turnover (TZS)"],
+            [
+                [i, row['Company'], f"{row['Total_Return_Pct']:+.2f}%",
+                 f"{row['Current_Price']:,.0f}", f"{row['Volatility_Pct']:.2f}%",
+                 f"{row['Total_Turnover']:,.0f}"]
+                for i, (_, row) in enumerate(top_returns.iterrows(), 1)
+            ]
+        )
+
+        # Worst Performers
+        worst_returns = self.get_top_performers(metrics, 'Total_Return_Pct', 10, ascending=True)
+        _ranked_table(
+            "Top 10 Worst Performers (By Total Return)",
+            ["Rank", "Company", "Return %", "Price (TZS)", "Volatility %", "Turnover (TZS)"],
+            [
+                [i, row['Company'], f"{row['Total_Return_Pct']:+.2f}%",
+                 f"{row['Current_Price']:,.0f}", f"{row['Volatility_Pct']:.2f}%",
+                 f"{row['Total_Turnover']:,.0f}"]
+                for i, (_, row) in enumerate(worst_returns.iterrows(), 1)
+            ]
+        )
+
+        # Most Actively Traded
+        top_turnover = self.get_top_performers(metrics, 'Total_Turnover', 10)
+        _ranked_table(
+            "Top 10 Most Actively Traded (By Turnover)",
+            ["Rank", "Company", "Turnover (TZS)", "Return %", "Liquidity %"],
+            [
+                [i, row['Company'], f"{row['Total_Turnover']:,.0f}",
+                 f"{row['Total_Return_Pct']:+.2f}%", f"{row['Liquidity_Ratio']:.1f}%"]
+                for i, (_, row) in enumerate(top_turnover.iterrows(), 1)
+            ]
+        )
+
+        # Risk-Adjusted
+        tradeable = metrics[metrics['Volatility_Pct'] > 0]
+        top_sharpe = self.get_top_performers(tradeable, 'Sharpe_Ratio', 10)
+        _ranked_table(
+            "Top 10 Risk-Adjusted Performers (By Sharpe Ratio)",
+            ["Rank", "Company", "Sharpe", "Return %", "Volatility %", "Price (TZS)"],
+            [
+                [i, row['Company'], f"{row['Sharpe_Ratio']:.3f}",
+                 f"{row['Total_Return_Pct']:+.2f}%", f"{row['Volatility_Pct']:.2f}%",
+                 f"{row['Current_Price']:,.0f}"]
+                for i, (_, row) in enumerate(top_sharpe.iterrows(), 1)
+            ]
+        )
+
+        # Most Volatile
+        top_volatile = self.get_top_performers(metrics, 'Volatility_Pct', 10)
+        _ranked_table(
+            "Top 10 Most Volatile Stocks",
+            ["Rank", "Company", "Volatility %", "Return %", "Price Range %"],
+            [
+                [i, row['Company'], f"{row['Volatility_Pct']:.2f}%",
+                 f"{row['Total_Return_Pct']:+.2f}%", f"{row['Price_Range_Pct']:.2f}%"]
+                for i, (_, row) in enumerate(top_volatile.iterrows(), 1)
+            ]
+        )
+
+        # Latest Day Momentum
+        top_momentum = self.get_top_performers(metrics, 'Latest_Return_Pct', 10)
+        _ranked_table(
+            "Latest Day Momentum (Today's Best Gainers)",
+            ["Rank", "Company", "Today %", "Price (TZS)", "Total Return %"],
+            [
+                [i, row['Company'], f"{row['Latest_Return_Pct']:+.2f}%",
+                 f"{row['Current_Price']:,.0f}", f"{row['Total_Return_Pct']:+.2f}%"]
+                for i, (_, row) in enumerate(top_momentum.iterrows(), 1)
+            ]
+        )
+
+        # Price Categories
+        r.append("\n## Stock Price Categories")
+
+        premium = metrics[metrics['Current_Price'] >= 5000]
+        mid_cap = metrics[(metrics['Current_Price'] >= 1000) & (metrics['Current_Price'] < 5000)]
+        small_cap = metrics[metrics['Current_Price'] < 1000]
+
+        r.append(f"\n**Premium Stocks (>= TZS 5,000):** {len(premium)}")
+        for _, row in premium.nlargest(3, 'Total_Return_Pct').iterrows():
+            r.append(f"- {row['Company']}: TZS {row['Current_Price']:,.0f} ({row['Total_Return_Pct']:+.2f}%)")
+
+        r.append(f"\n**Mid-Cap Stocks (TZS 1,000 - 5,000):** {len(mid_cap)}")
+        for _, row in mid_cap.nlargest(3, 'Total_Return_Pct').iterrows():
+            r.append(f"- {row['Company']}: TZS {row['Current_Price']:,.0f} ({row['Total_Return_Pct']:+.2f}%)")
+
+        r.append(f"\n**Small-Cap Stocks (< TZS 1,000):** {len(small_cap)}")
+        for _, row in small_cap.nlargest(3, 'Total_Return_Pct').iterrows():
+            r.append(f"- {row['Company']}: TZS {row['Current_Price']:,.0f} ({row['Total_Return_Pct']:+.2f}%)")
+
+        # Investment Insights
+        r.append("\n## Investment Insights")
+
+        strong = metrics[
+            (metrics['Total_Return_Pct'] > 0) &
+            (metrics['Liquidity_Ratio'] >= 100) &
+            (metrics['Volatility_Pct'] > 0)
+        ].nlargest(5, 'Sharpe_Ratio')
+
+        if len(strong) > 0:
+            r.append("\n**Strong Performers** (Good returns with high liquidity):")
+            for _, row in strong.iterrows():
+                r.append(
+                    f"- **{row['Company']}**: Return {row['Total_Return_Pct']:+.2f}%, "
+                    f"Sharpe {row['Sharpe_Ratio']:.3f}, "
+                    f"Turnover TZS {row['Total_Turnover']:,.0f}"
+                )
+
+        hot = metrics[metrics['Latest_Return_Pct'] > 2].nlargest(3, 'Latest_Return_Pct')
+        if len(hot) > 0:
+            r.append("\n**High Momentum** (Latest day gains > 2%):")
+            for _, row in hot.iterrows():
+                r.append(f"- **{row['Company']}**: +{row['Latest_Return_Pct']:.2f}% today")
+
+        value = metrics[
+            (metrics['Total_Return_Pct'] < -5) &
+            (metrics['Liquidity_Ratio'] >= 100)
+        ].nsmallest(3, 'Total_Return_Pct')
+        if len(value) > 0:
+            r.append("\n**Potential Value Plays** (Oversold but liquid):")
+            for _, row in value.iterrows():
+                r.append(
+                    f"- **{row['Company']}**: {row['Total_Return_Pct']:.2f}% "
+                    f"(Price: TZS {row['Current_Price']:,.0f})"
+                )
+
+        r.append("\n---")
+        r.append("*DISCLAIMER: This report is for informational purposes only. "
+                 "Past performance does not guarantee future results.*")
+
+        return "\n".join(r)
+
     def export_metrics_csv(self, output_path: str = "stock_metrics.csv"):
         """Export calculated metrics to CSV for further analysis."""
         metrics = self.calculate_metrics()

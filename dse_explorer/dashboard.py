@@ -454,7 +454,8 @@ def main():
             analyzer = StockAnalyzer()
             analyzer.load_data()
             report_text = analyzer.generate_report(output_path="report.txt")
-        st.code(report_text, language=None)
+            report_md = analyzer.generate_report_markdown()
+        st.markdown(report_md)
         st.download_button(
             label="📥 Download Report",
             data=report_text,
