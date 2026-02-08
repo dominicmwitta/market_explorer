@@ -444,6 +444,25 @@ def main():
         mime="text/csv"
     )
 
+    # ===== ANALYTICAL REPORT =====
+    st.markdown("---")
+    st.subheader("📝 Analytical Report")
+
+    if st.button("Generate Report"):
+        from dse_explorer.analyzer import StockAnalyzer
+        with st.spinner("Generating report..."):
+            analyzer = StockAnalyzer()
+            analyzer.load_data()
+            report_text = analyzer.generate_report(output_path="report.txt")
+        st.code(report_text, language=None)
+        st.download_button(
+            label="📥 Download Report",
+            data=report_text,
+            file_name="dse_analysis_report.txt",
+            mime="text/plain",
+            key="download_report"
+        )
+
     # Footer
     st.markdown("---")
     st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Data source: DSE Tanzania")
