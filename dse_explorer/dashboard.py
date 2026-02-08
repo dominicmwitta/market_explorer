@@ -172,7 +172,7 @@ def main():
                 labels={'Total_Return': 'Return (%)', 'Company': ''}
             )
             fig.update_layout(height=400, showlegend=False, yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with col2:
             st.subheader("Worst Performers")
@@ -188,7 +188,7 @@ def main():
                 labels={'Total_Return': 'Return (%)', 'Company': ''}
             )
             fig.update_layout(height=400, showlegend=False, yaxis={'categoryorder': 'total descending'})
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         # Risk-adjusted performance
         st.subheader("Risk-Adjusted Performance (Sharpe Ratio)")
@@ -203,7 +203,7 @@ def main():
             labels={'Sharpe_Ratio': 'Sharpe Ratio', 'Total_Return': 'Return %'}
         )
         fig.update_layout(height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # TAB 2: Price Trends
     with tab2:
@@ -229,7 +229,7 @@ def main():
                 markers=True
             )
             fig.update_layout(height=450, hovermode='x unified')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             # Normalized comparison (base 100)
             st.subheader("Normalized Price Comparison (Base = 100)")
@@ -254,7 +254,7 @@ def main():
                 )
                 fig.add_hline(y=100, line_dash="dash", line_color="gray", annotation_text="Base")
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
     # TAB 3: Returns Analysis
     with tab3:
@@ -271,7 +271,7 @@ def main():
             )
             fig.add_vline(x=0, line_dash="dash", line_color="red")
             fig.update_layout(height=350)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with col2:
             st.subheader("Return vs Volatility")
@@ -287,7 +287,7 @@ def main():
             )
             fig.add_hline(y=0, line_dash="dash", line_color="gray")
             fig.update_layout(height=350)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         # Latest day momentum
         st.subheader("Latest Day Momentum")
@@ -306,7 +306,7 @@ def main():
             yaxis_title='Return (%)',
             xaxis_title=''
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # TAB 4: Volume Analysis
     with tab4:
@@ -323,7 +323,7 @@ def main():
             labels={'Total_Turnover': 'Turnover (TZS)', 'Total_Return': 'Return %'}
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Volume treemap
         st.subheader("Market Share by Turnover")
@@ -338,7 +338,7 @@ def main():
             color_continuous_midpoint=0
         )
         fig.update_layout(height=450)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Volume over time
         st.subheader("Daily Turnover Trend")
@@ -351,7 +351,7 @@ def main():
             labels={'Turnover': 'Total Turnover (TZS)', 'Date': ''}
         )
         fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # TAB 5: Stock Comparison
     with tab5:
@@ -418,7 +418,7 @@ def main():
 
             fig.update_layout(height=500, showlegend=False)
             fig.update_xaxes(rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     # ===== DATA TABLE =====
     st.markdown("---")
@@ -431,7 +431,7 @@ def main():
 
     st.dataframe(
         display_df,
-        use_container_width=True,
+        width="stretch",
         height=400
     )
 
