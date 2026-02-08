@@ -41,6 +41,15 @@ For a non-editable install:
 pip install .
 ```
 
+### Install directly from GitHub
+
+```bash
+pip install git+https://github.com/dominicmwitta/market_explorer.git
+
+# Then install the Playwright browser
+playwright install chromium
+```
+
 ## Uninstallation
 
 ```bash
