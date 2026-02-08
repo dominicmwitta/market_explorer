@@ -449,5 +449,13 @@ def main():
     st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Data source: DSE Tanzania")
 
 
+def cli():
+    """CLI entry point that launches streamlit."""
+    import sys
+    from streamlit.web.cli import main as st_main
+    sys.argv = ["streamlit", "run", __file__]
+    st_main()
+
+
 if __name__ == "__main__":
     main()

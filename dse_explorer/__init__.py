@@ -1,4 +1,4 @@
-"""DSE Scraper - Modular package for scraping Dar es Salaam Stock Exchange data."""
+"""DSE Explorer - Scraper and analytics for the Dar es Salaam Stock Exchange."""
 
 from .config import BASE_URL, COMPANY_NAMES, COLUMN_NAMES, REPORTS_DIR
 from .scraper import fetch_page, find_daily_report_urls, get_homepage

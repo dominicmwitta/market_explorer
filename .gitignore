@@ -27,5 +27,10 @@ reports/
 logs/
 *.log
 
+# Build / packaging
+*.egg-info/
+dist/
+build/
+
 # Misc
 nul

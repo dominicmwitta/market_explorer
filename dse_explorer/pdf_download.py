@@ -148,7 +148,11 @@ def fetch_latest_dse_report():
             browser.close()
 
 
-if __name__ == "__main__":
+def main():
     success = fetch_latest_dse_report()
     if not success:
         print("Failed to fetch today's report. Check screenshot and try again later.")
+
+
+if __name__ == "__main__":
+    main()

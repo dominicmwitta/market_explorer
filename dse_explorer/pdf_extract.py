@@ -224,6 +224,10 @@ def extract_equity_prices(pdf_path=None):
         return df
 
 
-if __name__ == "__main__":
+def main():
     pdf_file = sys.argv[1] if len(sys.argv) > 1 else None
     extract_equity_prices(pdf_file)
+
+
+if __name__ == "__main__":
+    main()

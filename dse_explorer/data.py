@@ -25,6 +25,11 @@ def deduplicate_rows(raw_rows):
     return list(company_best.values())
 
 
+def get_value(nums, index, default=0):
+    """Safely get a value from nums list with default fallback."""
+    return nums[index] if index < len(nums) else default
+
+
 def create_dataframe(parsed_rows, report_date):
     """Build DataFrame with validation.
 
@@ -38,12 +43,18 @@ def create_dataframe(parsed_rows, report_date):
     data_for_df = []
     for row in parsed_rows:
         nums = row['numbers']
+        # Require at least 5 numbers for basic price data
         if len(nums) >= 5:
             opening = nums[0]
             closing = nums[1]
             high = nums[2]
             low = nums[3]
             turnover = nums[4]
+            deals = get_value(nums, 5)
+            outstanding_bids = get_value(nums, 6)
+            outstanding_offers = get_value(nums, 7)
+            volume = get_value(nums, 8)
+            market_cap = get_value(nums, 9, default=0.0)
 
             # Basic sanity check - prices should be < 100,000 typically
             if opening < 100000 and closing < 100000:
@@ -56,7 +67,12 @@ def create_dataframe(parsed_rows, report_date):
                         'Closing_Price': closing,
                         'High': high,
                         'Low': low,
-                        'Turnover': turnover
+                        'Turnover': turnover,
+                        'Deals': deals,
+                        'Outstanding_Bids': outstanding_bids,
+                        'Outstanding_Offers': outstanding_offers,
+                        'Volume': volume,
+                        'Market_Cap': market_cap
                     })
 
     df = pd.DataFrame(data_for_df, columns=COLUMN_NAMES)

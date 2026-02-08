@@ -8,7 +8,7 @@ from datetime import datetime
 LOG_DIR = 'logs'
 
 # Create logger
-logger = logging.getLogger('dse_scraper')
+logger = logging.getLogger('dse_explorer')
 logger.setLevel(logging.DEBUG)
 
 # Prevent duplicate handlers
@@ -17,7 +17,7 @@ if not logger.handlers:
     os.makedirs(LOG_DIR, exist_ok=True)
 
     # File handler - daily log file
-    log_filename = os.path.join(LOG_DIR, f'dse_scraper_{datetime.now().strftime("%Y-%m-%d")}.log')
+    log_filename = os.path.join(LOG_DIR, f'dse_explorer_{datetime.now().strftime("%Y-%m-%d")}.log')
     file_handler = logging.FileHandler(log_filename, encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
 

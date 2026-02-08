@@ -3,7 +3,7 @@
 import os
 import pandas as pd
 
-from dse_scraper import (
+from dse_explorer import (
     get_homepage,
     find_daily_report_urls,
     extract_equity_data,
@@ -12,8 +12,8 @@ from dse_scraper import (
     deduplicate_rows,
     create_dataframe,
 )
-from dse_scraper.scraper import close_browser
-from dse_scraper.logger import get_logger
+from dse_explorer.scraper import close_browser
+from dse_explorer.logger import get_logger
 
 OUTPUT_FILE = 'dse_equity_daily.csv'
 log = get_logger()
