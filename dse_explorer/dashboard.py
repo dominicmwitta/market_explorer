@@ -286,8 +286,18 @@ def main():
             key="trend_stocks"
         )
 
+        t2_dates = st.date_input(
+            "Date range", value=(date_min, date_max),
+            min_value=date_min, max_value=date_max, key="tab2_dates"
+        )
+
         if trend_stocks:
             trend_data = df[df['Company'].isin(trend_stocks)]
+            if len(t2_dates) == 2:
+                trend_data = trend_data[
+                    (trend_data['Date'] >= pd.Timestamp(t2_dates[0])) &
+                    (trend_data['Date'] <= pd.Timestamp(t2_dates[1]))
+                ]
 
             fig = px.line(
                 trend_data,
@@ -411,7 +421,18 @@ def main():
 
         # Volume over time
         st.subheader("Daily Turnover Trend")
+
+        t4_dates = st.date_input(
+            "Date range", value=(date_min, date_max),
+            min_value=date_min, max_value=date_max, key="tab4_dates"
+        )
+
         daily_volume = df.groupby('Date')['Turnover'].sum().reset_index()
+        if len(t4_dates) == 2:
+            daily_volume = daily_volume[
+                (daily_volume['Date'] >= pd.Timestamp(t4_dates[0])) &
+                (daily_volume['Date'] <= pd.Timestamp(t4_dates[1]))
+            ]
 
         fig = px.area(
             daily_volume,
@@ -452,7 +473,18 @@ def main():
 
             # Price comparison chart
             st.subheader("Price Comparison")
+
+            t5_dates = st.date_input(
+                "Date range", value=(date_min, date_max),
+                min_value=date_min, max_value=date_max, key="tab5_dates"
+            )
+
             compare_data = df[df['Company'].isin([stock1, stock2])]
+            if len(t5_dates) == 2:
+                compare_data = compare_data[
+                    (compare_data['Date'] >= pd.Timestamp(t5_dates[0])) &
+                    (compare_data['Date'] <= pd.Timestamp(t5_dates[1]))
+                ]
 
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                                subplot_titles=(f'{stock1} Price', f'{stock2} Price'),
@@ -496,7 +528,18 @@ def main():
         st.subheader("Technical Analysis")
 
         ta_stock = st.selectbox("Select Stock", all_companies, key="ta_stock")
+
+        t6_dates = st.date_input(
+            "Date range", value=(date_min, date_max),
+            min_value=date_min, max_value=date_max, key="tab6_dates"
+        )
+
         stock_data = df[df['Company'] == ta_stock].copy().sort_values('Date').reset_index(drop=True)
+        if len(t6_dates) == 2:
+            stock_data = stock_data[
+                (stock_data['Date'] >= pd.Timestamp(t6_dates[0])) &
+                (stock_data['Date'] <= pd.Timestamp(t6_dates[1]))
+            ].reset_index(drop=True)
 
         if len(stock_data) < 2:
             st.warning("Not enough data for technical analysis")
@@ -768,6 +811,19 @@ def main():
                 # Portfolio value chart
                 if bt.portfolio_values:
                     pv_df = pd.DataFrame(bt.portfolio_values)
+
+                    pv_min = pv_df['Date'].min().date()
+                    pv_max = pv_df['Date'].max().date()
+                    t9_dates = st.date_input(
+                        "Date range", value=(pv_min, pv_max),
+                        min_value=pv_min, max_value=pv_max, key="tab9_dates"
+                    )
+                    if len(t9_dates) == 2:
+                        pv_df = pv_df[
+                            (pv_df['Date'] >= pd.Timestamp(t9_dates[0])) &
+                            (pv_df['Date'] <= pd.Timestamp(t9_dates[1]))
+                        ]
+
                     fig = px.line(
                         pv_df, x='Date', y='Value',
                         labels={'Value': 'Portfolio Value', 'Date': ''},
