@@ -182,6 +182,25 @@ def main():
     # ===== MAIN CHARTS =====
     st.markdown("---")
 
+    # Style tab ribbon: wrap into two rows with grey background
+    st.markdown("""
+    <style>
+    /* Tab list: wrap and grey background */
+    div[data-baseweb="tab-list"] {
+        flex-wrap: wrap;
+        background-color: #f0f2f6;
+        border-radius: 8px;
+        padding: 4px;
+        gap: 2px;
+    }
+    /* Individual tab buttons */
+    div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
+        flex: 0 1 auto;
+        white-space: nowrap;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "\U0001F3C6 Performance", "\U0001F4C8 Price Trends", "\U0001F4B9 Returns Analysis",
         "\U0001F4CA Volume Analysis", "\U0001F3AF Stock Comparison",
