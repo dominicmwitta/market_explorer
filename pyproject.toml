@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.23.0",
     "streamlit>=1.28.0",
     "plotly>=5.15.0",
+    "openpyxl>=3.1.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -29,3 +30,8 @@ dse-pdf-extract = "dse_explorer.pdf_extract:main"
 dse-analyze = "dse_explorer.analyzer:main"
 dse-dashboard = "dse_explorer.dashboard:cli"
 dse-create-shortcuts = "dse_explorer.shortcuts:main"
+dse-watchlist = "dse_explorer.watchlist:main"
+dse-alerts = "dse_explorer.alerts:main"
+dse-backfill = "dse_explorer.backfill:main"
+dse-schedule = "dse_explorer.scheduler:main"
+dse-backtest = "dse_explorer.backtest:main"

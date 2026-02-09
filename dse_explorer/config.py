@@ -15,3 +15,22 @@ COLUMN_NAMES = [
 ]
 
 REPORTS_DIR = 'reports'
+
+SECTOR_MAP = {
+    "Banking": ["CRDB", "DCB", "KCB", "MCB", "MKCB", "MUCOBA", "NMB", "YETU"],
+    "Manufacturing": ["TBL", "TCC", "TCCL", "TPCC"],
+    "Agriculture": ["KA", "MBP"],
+    "Telecommunications": ["VODA"],
+    "Insurance": ["NICO"],
+    "Investment": ["DSE", "SWALA", "SWIS", "NMG", "JHL"],
+    "Services": ["AFRIPRISE", "JATU", "PAL", "TOL", "TTP", "USL", "EABL"],
+    "ETFs": ["IEACLC-ETF", "VERTEX-ETF"],
+}
+
+
+def get_sector(company: str) -> str:
+    """Return the sector name for a given company ticker."""
+    for sector, companies in SECTOR_MAP.items():
+        if company in companies:
+            return sector
+    return "Unknown"

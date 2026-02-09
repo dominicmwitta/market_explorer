@@ -1,0 +1,123 @@
+"""Simple momentum backtesting engine for DSE stocks."""
+
+import argparse
+
+import pandas as pd
+import numpy as np
+
+
+class MomentumBacktest:
+    """Buy top-N stocks by previous day's return, equal weight, daily rebalance."""
+
+    def __init__(self, csv_path: str = "dse_equity_daily.csv", top_n: int = 5):
+        self.csv_path = csv_path
+        self.top_n = top_n
+        self.df = None
+        self.portfolio_values: list[dict] = []
+
+    def _load(self) -> pd.DataFrame:
+        df = pd.read_csv(self.csv_path)
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.sort_values(["Date", "Company"]).reset_index(drop=True)
+        self.df = df
+        return df
+
+    def run(self) -> dict:
+        """Execute the backtest and return summary statistics."""
+        if self.df is None:
+            self._load()
+
+        # Pivot closing prices
+        prices = self.df.pivot_table(
+            index="Date", columns="Company", values="Closing_Price"
+        )
+        prices = prices.sort_index()
+
+        # Daily returns
+        returns = prices.pct_change()
+
+        dates = returns.index[1:]  # skip first NaN row
+        portfolio_value = 100.0
+        values = [{"Date": prices.index[0], "Value": portfolio_value}]
+        daily_returns = []
+
+        for i, date in enumerate(dates):
+            if i == 0:
+                # No previous return to rank on the first tradeable day
+                values.append({"Date": date, "Value": portfolio_value})
+                continue
+
+            prev_date = dates[i - 1]
+            prev_returns = returns.loc[prev_date].dropna()
+
+            if len(prev_returns) < self.top_n:
+                top_stocks = prev_returns.nlargest(len(prev_returns)).index
+            else:
+                top_stocks = prev_returns.nlargest(self.top_n).index
+
+            # Equal weight return for today
+            today_returns = returns.loc[date, top_stocks].dropna()
+            if len(today_returns) == 0:
+                daily_ret = 0.0
+            else:
+                daily_ret = today_returns.mean()
+
+            daily_returns.append(daily_ret)
+            portfolio_value *= (1 + daily_ret)
+            values.append({"Date": date, "Value": portfolio_value})
+
+        self.portfolio_values = values
+        daily_returns = np.array(daily_returns)
+
+        # Summary stats
+        total_return = (portfolio_value / 100 - 1) * 100
+        win_rate = (daily_returns > 0).sum() / len(daily_returns) * 100 if len(daily_returns) > 0 else 0
+
+        # Max drawdown
+        cummax = np.maximum.accumulate([v["Value"] for v in values])
+        drawdowns = (np.array([v["Value"] for v in values]) - cummax) / cummax * 100
+        max_drawdown = drawdowns.min()
+
+        best_day = daily_returns.max() * 100 if len(daily_returns) > 0 else 0
+        worst_day = daily_returns.min() * 100 if len(daily_returns) > 0 else 0
+
+        return {
+            "total_return_pct": round(total_return, 2),
+            "win_rate_pct": round(win_rate, 2),
+            "max_drawdown_pct": round(max_drawdown, 2),
+            "best_day_pct": round(best_day, 2),
+            "worst_day_pct": round(worst_day, 2),
+            "trading_days": len(daily_returns),
+            "top_n": self.top_n,
+        }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="DSE Momentum Backtesting")
+    parser.add_argument("--data", default="dse_equity_daily.csv", help="CSV data file")
+    parser.add_argument("--top-n", type=int, default=5, help="Number of top stocks to hold")
+
+    args = parser.parse_args()
+
+    bt = MomentumBacktest(csv_path=args.data, top_n=args.top_n)
+    try:
+        results = bt.run()
+    except FileNotFoundError:
+        print(f"Error: data file '{args.data}' not found. Run the scraper first.")
+        return 1
+
+    print("=" * 50)
+    print("DSE MOMENTUM BACKTEST RESULTS")
+    print("=" * 50)
+    print(f"Strategy: Buy top {results['top_n']} stocks by previous day return")
+    print(f"Trading Days: {results['trading_days']}")
+    print(f"Total Return: {results['total_return_pct']:+.2f}%")
+    print(f"Win Rate: {results['win_rate_pct']:.1f}%")
+    print(f"Max Drawdown: {results['max_drawdown_pct']:.2f}%")
+    print(f"Best Day: {results['best_day_pct']:+.2f}%")
+    print(f"Worst Day: {results['worst_day_pct']:+.2f}%")
+    return 0
+
+
+if __name__ == "__main__":
+    exit(main())

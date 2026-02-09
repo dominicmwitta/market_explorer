@@ -194,6 +194,18 @@ def main():
     final = update_master_csv(result)
     print(final.to_string())
 
+    # Check price alerts
+    try:
+        from dse_explorer.alerts import check_alerts
+        triggered = check_alerts(final)
+        for alert in triggered:
+            log.warning(
+                f"ALERT: {alert['company']} is {alert['condition']} "
+                f"{alert['price']} (current: {alert['current_price']:.2f})"
+            )
+    except Exception as e:
+        log.debug(f"Alert check skipped: {e}")
+
     log.info("DSE Daily Pipeline Completed")
 
 

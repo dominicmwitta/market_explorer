@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import argparse
 
+from dse_explorer.config import SECTOR_MAP, get_sector
+
 
 class StockAnalyzer:
     """Analyzes DSE stock data to identify best performers."""
@@ -120,6 +122,168 @@ class StockAnalyzer:
         """Get top performing stocks by specified metric."""
         return metrics_df.nlargest(top_n, by) if not ascending else metrics_df.nsmallest(top_n, by)
 
+    def analyze_order_book(self, metrics_df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze bid/offer pressure from latest data."""
+        if self.df is None:
+            self.load_data()
+
+        latest_date = self.df["Date"].max()
+        latest = self.df[self.df["Date"] == latest_date].copy()
+
+        results = []
+        for _, row in latest.iterrows():
+            bids = pd.to_numeric(row.get("Outstanding_Bids", 0), errors="coerce") or 0
+            offers = pd.to_numeric(row.get("Outstanding_Offers", 0), errors="coerce") or 0
+            if offers > 0:
+                ratio = bids / offers
+            else:
+                ratio = float("inf") if bids > 0 else 0.0
+
+            if ratio > 1.5:
+                pressure = "Strong Buy Pressure"
+            elif ratio < 0.67:
+                pressure = "Sell Pressure"
+            else:
+                pressure = "Neutral"
+
+            results.append({
+                "Company": row["Company"],
+                "Outstanding_Bids": bids,
+                "Outstanding_Offers": offers,
+                "Bid_Offer_Ratio": round(ratio, 2) if ratio != float("inf") else None,
+                "Pressure": pressure,
+            })
+
+        return pd.DataFrame(results)
+
+    def detect_volume_spikes(self, threshold: float = 2.0) -> pd.DataFrame:
+        """Detect stocks with volume spikes above the average."""
+        if self.df is None:
+            self.load_data()
+
+        self.df["Volume"] = pd.to_numeric(self.df["Volume"], errors="coerce").fillna(0)
+        latest_date = self.df["Date"].max()
+        results = []
+
+        for company in self.df["Company"].unique():
+            stock = self.df[self.df["Company"] == company]
+            avg_vol = stock["Volume"].mean()
+            latest_vol = stock[stock["Date"] == latest_date]["Volume"]
+            if latest_vol.empty:
+                continue
+            latest_vol = float(latest_vol.iloc[0])
+            spike_ratio = latest_vol / avg_vol if avg_vol > 0 else 0
+            if spike_ratio >= threshold:
+                results.append({
+                    "Company": company,
+                    "Latest_Volume": latest_vol,
+                    "Avg_Volume": round(avg_vol, 0),
+                    "Spike_Ratio": round(spike_ratio, 2),
+                })
+
+        return pd.DataFrame(results)
+
+    def market_breadth(self) -> dict:
+        """Calculate market breadth indicators."""
+        if self.df is None:
+            self.load_data()
+
+        latest_date = self.df["Date"].max()
+        latest = self.df[self.df["Date"] == latest_date]
+
+        # Daily returns for latest day
+        gainers = 0
+        losers = 0
+        above_avg = 0
+        total = 0
+
+        for company in self.df["Company"].unique():
+            stock = self.df[self.df["Company"] == company].sort_values("Date")
+            if len(stock) < 2:
+                continue
+            total += 1
+            last_close = stock["Closing_Price"].iloc[-1]
+            prev_close = stock["Closing_Price"].iloc[-2]
+            if last_close > prev_close:
+                gainers += 1
+            elif last_close < prev_close:
+                losers += 1
+
+            avg_price = stock["Closing_Price"].mean()
+            if last_close > avg_price:
+                above_avg += 1
+
+        ad_ratio = gainers / losers if losers > 0 else float("inf")
+        pct_positive = gainers / total * 100 if total > 0 else 0
+        pct_above_avg = above_avg / total * 100 if total > 0 else 0
+
+        return {
+            "gainers": gainers,
+            "losers": losers,
+            "unchanged": total - gainers - losers,
+            "advance_decline_ratio": round(ad_ratio, 2) if ad_ratio != float("inf") else None,
+            "pct_positive_return": round(pct_positive, 1),
+            "pct_above_avg_price": round(pct_above_avg, 1),
+        }
+
+    def correlation_matrix(self) -> pd.DataFrame:
+        """Return a correlation matrix of daily returns across stocks."""
+        if self.df is None:
+            self.load_data()
+
+        # Pivot daily returns
+        prices = self.df.pivot_table(index="Date", columns="Company", values="Closing_Price")
+        returns = prices.pct_change().dropna(how="all")
+        return returns.corr()
+
+    def sector_performance(self) -> pd.DataFrame:
+        """Calculate average return by sector."""
+        metrics = self.calculate_metrics()
+        metrics["Sector"] = metrics["Company"].apply(get_sector)
+
+        sector_stats = metrics.groupby("Sector").agg(
+            Avg_Return=("Total_Return_Pct", "mean"),
+            Num_Stocks=("Company", "count"),
+            Total_Turnover=("Total_Turnover", "sum"),
+        ).round(2).reset_index()
+
+        return sector_stats.sort_values("Avg_Return", ascending=False)
+
+    def export_excel(self, output_path: str = "dse_report.xlsx") -> str:
+        """Export analysis to a multi-sheet Excel workbook."""
+        import openpyxl  # noqa: F401 – ensure dependency is available
+
+        metrics = self.calculate_metrics()
+        order_book = self.analyze_order_book(metrics)
+        vol_spikes = self.detect_volume_spikes()
+        sector_perf = self.sector_performance()
+
+        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+            # Summary sheet
+            breadth = self.market_breadth()
+            summary = pd.DataFrame([breadth])
+            summary.to_excel(writer, sheet_name="Summary", index=False)
+
+            # Metrics
+            metrics.to_excel(writer, sheet_name="Metrics", index=False)
+
+            # Top performers
+            top = self.get_top_performers(metrics, "Total_Return_Pct", 10)
+            top.to_excel(writer, sheet_name="Top Performers", index=False)
+
+            # Order Book
+            order_book.to_excel(writer, sheet_name="Order Book", index=False)
+
+            # Volume Spikes
+            if not vol_spikes.empty:
+                vol_spikes.to_excel(writer, sheet_name="Volume Spikes", index=False)
+
+            # Sector Performance
+            sector_perf.to_excel(writer, sheet_name="Sector Performance", index=False)
+
+        print(f"Excel report saved to: {output_path}")
+        return output_path
+
     def generate_report(self, output_path: str = None) -> str:
         """Generate comprehensive analytical report."""
         metrics = self.calculate_metrics()
@@ -148,7 +312,7 @@ class StockAnalyzer:
         avg_market_return = metrics['Total_Return_Pct'].mean()
         total_market_turnover = metrics['Total_Turnover'].sum()
 
-        report.append(f"\nMarket Sentiment:")
+        report.append(f"\nMarket Sentiment ({date_min} to {date_max}):")
         report.append(f"  Gainers: {gainers} stocks")
         report.append(f"  Losers: {losers} stocks")
         report.append(f"  Unchanged: {unchanged} stocks")
@@ -157,7 +321,7 @@ class StockAnalyzer:
 
         # Top Performers by Total Return
         report.append("\n" + "-" * 80)
-        report.append("TOP 10 BEST PERFORMERS (By Total Return)")
+        report.append(f"TOP 10 BEST PERFORMERS (Total Return: {date_min} to {date_max})")
         report.append("-" * 80)
         report.append(f"\n{'Rank':<5}{'Company':<12}{'Return %':<12}{'Price':<12}{'Volatility':<12}{'Turnover':<15}")
         report.append("-" * 68)
@@ -172,7 +336,7 @@ class StockAnalyzer:
 
         # Worst Performers
         report.append("\n" + "-" * 80)
-        report.append("TOP 10 WORST PERFORMERS (By Total Return)")
+        report.append(f"TOP 10 WORST PERFORMERS (Total Return: {date_min} to {date_max})")
         report.append("-" * 80)
         report.append(f"\n{'Rank':<5}{'Company':<12}{'Return %':<12}{'Price':<12}{'Volatility':<12}{'Turnover':<15}")
         report.append("-" * 68)
@@ -271,6 +435,61 @@ class StockAnalyzer:
             for _, row in best_small.iterrows():
                 report.append(f"  - {row['Company']}: TZS {row['Current_Price']:,.0f} ({row['Total_Return_Pct']:+.2f}%)")
 
+        # Order Book Analysis
+        report.append("\n" + "-" * 80)
+        report.append("ORDER BOOK ANALYSIS")
+        report.append("-" * 80)
+
+        order_book = self.analyze_order_book(metrics)
+        report.append(f"\n{'Company':<12}{'Bids':<15}{'Offers':<15}{'Ratio':<10}{'Pressure'}")
+        report.append("-" * 67)
+        for _, row in order_book.iterrows():
+            ratio_str = f"{row['Bid_Offer_Ratio']:.2f}" if row['Bid_Offer_Ratio'] is not None else "N/A"
+            report.append(
+                f"{row['Company']:<12}{row['Outstanding_Bids']:<15,.0f}"
+                f"{row['Outstanding_Offers']:<15,.0f}{ratio_str:<10}{row['Pressure']}"
+            )
+
+        # Volume Spikes
+        vol_spikes = self.detect_volume_spikes()
+        if not vol_spikes.empty:
+            report.append("\n" + "-" * 80)
+            report.append("VOLUME SPIKE ALERTS (>= 2x Average)")
+            report.append("-" * 80)
+            report.append(f"\n{'Company':<12}{'Latest Vol':<15}{'Avg Vol':<15}{'Spike Ratio'}")
+            report.append("-" * 57)
+            for _, row in vol_spikes.iterrows():
+                report.append(
+                    f"{row['Company']:<12}{row['Latest_Volume']:<15,.0f}"
+                    f"{row['Avg_Volume']:<15,.0f}{row['Spike_Ratio']:.1f}x"
+                )
+
+        # Market Breadth
+        breadth = self.market_breadth()
+        report.append("\n" + "-" * 80)
+        report.append("MARKET BREADTH")
+        report.append("-" * 80)
+        report.append(f"\n  Advancing: {breadth['gainers']}")
+        report.append(f"  Declining: {breadth['losers']}")
+        report.append(f"  Unchanged: {breadth['unchanged']}")
+        ad = breadth['advance_decline_ratio']
+        report.append(f"  Advance/Decline Ratio: {ad if ad is not None else 'N/A'}")
+        report.append(f"  % Positive Return: {breadth['pct_positive_return']:.1f}%")
+        report.append(f"  % Above Period Average: {breadth['pct_above_avg_price']:.1f}%")
+
+        # Sector Performance
+        sector_perf = self.sector_performance()
+        report.append("\n" + "-" * 80)
+        report.append("SECTOR PERFORMANCE")
+        report.append("-" * 80)
+        report.append(f"\n{'Sector':<20}{'Avg Return %':<15}{'Stocks':<10}{'Turnover (TZS)'}")
+        report.append("-" * 60)
+        for _, row in sector_perf.iterrows():
+            report.append(
+                f"{row['Sector']:<20}{row['Avg_Return']:>10.2f}%    "
+                f"{row['Num_Stocks']:<10}{row['Total_Turnover']:>15,.0f}"
+            )
+
         # Recommendations Summary
         report.append("\n" + "-" * 80)
         report.append("INVESTMENT INSIGHTS")
@@ -351,7 +570,7 @@ class StockAnalyzer:
         avg_market_return = metrics['Total_Return_Pct'].mean()
         total_market_turnover = metrics['Total_Turnover'].sum()
 
-        r.append("\n## Market Overview")
+        r.append(f"\n## Market Overview ({date_min} to {date_max})")
         r.append(f"| Metric | Value |")
         r.append(f"|--------|-------|")
         r.append(f"| Gainers | {gainers} stocks |")
@@ -371,7 +590,7 @@ class StockAnalyzer:
         # Top Performers
         top_returns = self.get_top_performers(metrics, 'Total_Return_Pct', 10)
         _ranked_table(
-            "Top 10 Best Performers (By Total Return)",
+            f"Top 10 Best Performers (Total Return: {date_min} to {date_max})",
             ["Rank", "Company", "Return %", "Price (TZS)", "Volatility %", "Turnover (TZS)"],
             [
                 [i, row['Company'], f"{row['Total_Return_Pct']:+.2f}%",
@@ -384,7 +603,7 @@ class StockAnalyzer:
         # Worst Performers
         worst_returns = self.get_top_performers(metrics, 'Total_Return_Pct', 10, ascending=True)
         _ranked_table(
-            "Top 10 Worst Performers (By Total Return)",
+            f"Top 10 Worst Performers (Total Return: {date_min} to {date_max})",
             ["Rank", "Company", "Return %", "Price (TZS)", "Volatility %", "Turnover (TZS)"],
             [
                 [i, row['Company'], f"{row['Total_Return_Pct']:+.2f}%",
@@ -462,6 +681,61 @@ class StockAnalyzer:
         r.append(f"\n**Small-Cap Stocks (< TZS 1,000):** {len(small_cap)}")
         for _, row in small_cap.nlargest(3, 'Total_Return_Pct').iterrows():
             r.append(f"- {row['Company']}: TZS {row['Current_Price']:,.0f} ({row['Total_Return_Pct']:+.2f}%)")
+
+        # Order Book Analysis
+        order_book = self.analyze_order_book(metrics)
+        _ranked_table(
+            "Order Book Analysis",
+            ["Company", "Bids", "Offers", "Ratio", "Pressure"],
+            [
+                [row['Company'],
+                 f"{row['Outstanding_Bids']:,.0f}",
+                 f"{row['Outstanding_Offers']:,.0f}",
+                 f"{row['Bid_Offer_Ratio']:.2f}" if row['Bid_Offer_Ratio'] is not None else "N/A",
+                 row['Pressure']]
+                for _, row in order_book.iterrows()
+            ]
+        )
+
+        # Volume Spikes
+        vol_spikes = self.detect_volume_spikes()
+        if not vol_spikes.empty:
+            _ranked_table(
+                "Volume Spike Alerts (>= 2x Average)",
+                ["Company", "Latest Volume", "Avg Volume", "Spike Ratio"],
+                [
+                    [row['Company'],
+                     f"{row['Latest_Volume']:,.0f}",
+                     f"{row['Avg_Volume']:,.0f}",
+                     f"{row['Spike_Ratio']:.1f}x"]
+                    for _, row in vol_spikes.iterrows()
+                ]
+            )
+
+        # Market Breadth
+        breadth = self.market_breadth()
+        r.append("\n## Market Breadth")
+        r.append("| Metric | Value |")
+        r.append("|--------|-------|")
+        r.append(f"| Advancing | {breadth['gainers']} |")
+        r.append(f"| Declining | {breadth['losers']} |")
+        r.append(f"| Unchanged | {breadth['unchanged']} |")
+        ad = breadth['advance_decline_ratio']
+        r.append(f"| A/D Ratio | {ad if ad is not None else 'N/A'} |")
+        r.append(f"| % Positive Return | {breadth['pct_positive_return']:.1f}% |")
+        r.append(f"| % Above Period Average | {breadth['pct_above_avg_price']:.1f}% |")
+
+        # Sector Performance
+        sector_perf = self.sector_performance()
+        _ranked_table(
+            "Sector Performance",
+            ["Sector", "Avg Return %", "Stocks", "Total Turnover (TZS)"],
+            [
+                [row['Sector'], f"{row['Avg_Return']:+.2f}%",
+                 row['Num_Stocks'], f"{row['Total_Turnover']:,.0f}"]
+                for _, row in sector_perf.iterrows()
+            ]
+        )
 
         # Investment Insights
         r.append("\n## Investment Insights")

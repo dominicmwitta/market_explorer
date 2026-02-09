@@ -10,7 +10,19 @@ Collects daily equity and ETF price data from the DSE website, extracts data fro
 - **PDF extraction** - Parses downloaded PDF reports with pdfplumber to extract equity and ETF daily prices into CSV.
 - **Daily pipeline** - Runs the full workflow (scrape + PDF download + extract + compare + merge) in one command, deduplicating against existing data.
 - **Stock analysis** - Calculates performance metrics (returns, volatility, Sharpe ratio, momentum, liquidity) and generates a text report.
-- **Interactive dashboard** - Streamlit web app with charts for price trends, performance rankings, returns analysis, volume breakdowns, and stock comparison.
+- **Technical indicators** - SMA, EMA, RSI, MACD, and Bollinger Bands computed per stock.
+- **Order book analysis** - Bid/offer ratio and buy/sell pressure categorization.
+- **Volume spike detection** - Flags stocks with volume exceeding 2x their average.
+- **Market breadth** - Advance/decline ratio, percent of stocks with positive returns, percent above period average.
+- **Correlation matrix** - Cross-stock daily return correlations.
+- **Sector grouping** - Stocks grouped into Banking, Manufacturing, Agriculture, Telecommunications, Insurance, Investment, Services, and ETFs.
+- **Backtesting** - Simple momentum strategy backtest with portfolio tracking.
+- **Watchlist** - Personal stock watchlist stored as JSON with CLI management.
+- **Price alerts** - Configurable above/below price alerts with automatic checking in the pipeline.
+- **Excel export** - Multi-sheet Excel report (openpyxl).
+- **Historical backfill** - Scrape all available report URLs to build a complete dataset.
+- **Automated scheduling** - Windows Task Scheduler integration for daily pipeline runs.
+- **Interactive dashboard** - Streamlit web app with 9 tabs: Performance, Price Trends, Returns Analysis, Volume Analysis, Stock Comparison, Technical Analysis, Market Intelligence, Sector Analysis, and Backtesting.
 
 ### Companies tracked
 
@@ -58,7 +70,7 @@ pip uninstall dse-explorer
 
 ## Usage
 
-After installation, seven CLI commands are available:
+After installation, twelve CLI commands are available:
 
 ### dse-scrape
 
@@ -80,7 +92,7 @@ dse-scrape --output my_data.csv
 
 ### dse-pipeline
 
-Run the full daily pipeline: web scrape, PDF download, PDF extraction, source comparison, and merge into a master CSV.
+Run the full daily pipeline: web scrape, PDF download, PDF extraction, source comparison, merge into master CSV, and check price alerts.
 
 ```bash
 dse-pipeline
@@ -138,6 +150,88 @@ dse-dashboard
 
 Opens in your browser at `http://localhost:8501`.
 
+### dse-watchlist
+
+Manage your personal stock watchlist.
+
+```bash
+# Add a stock
+dse-watchlist --add CRDB
+
+# Remove a stock
+dse-watchlist --remove CRDB
+
+# List all stocks in the watchlist
+dse-watchlist --list
+```
+
+Watchlist is stored in `watchlist.json` in the working directory.
+
+### dse-alerts
+
+Manage price alerts that trigger when a stock crosses a threshold.
+
+```bash
+# Add an alert
+dse-alerts --add CRDB above 2500
+
+# List all alerts
+dse-alerts --list
+
+# Check alerts against latest data
+dse-alerts --check
+
+# Remove an alert by index
+dse-alerts --remove 0
+```
+
+Alerts are stored in `alerts.json`. They are also checked automatically at the end of `dse-pipeline`.
+
+### dse-backfill
+
+Scrape all available historical report URLs to build a complete dataset.
+
+```bash
+# Backfill to default output file
+dse-backfill
+
+# Backfill to a custom file
+dse-backfill --output historical.csv
+```
+
+### dse-schedule
+
+Set up automated daily pipeline runs using Windows Task Scheduler.
+
+```bash
+# Install a daily task at 18:00
+dse-schedule --install
+
+# Install at a custom time
+dse-schedule --install --time 17:30
+
+# Check current schedule status
+dse-schedule --status
+
+# Remove the scheduled task
+dse-schedule --remove
+```
+
+### dse-backtest
+
+Run a momentum backtesting strategy.
+
+```bash
+# Run with default settings (top 5 stocks)
+dse-backtest
+
+# Customize the number of stocks
+dse-backtest --top-n 3
+
+# Use a different data file
+dse-backtest --data my_data.csv
+```
+
 ### dse-create-shortcuts
 
 Create Windows desktop shortcuts for quick access to the Dashboard and Scraper.
@@ -151,6 +245,22 @@ This places two shortcuts on your Desktop:
 - **DSE Dashboard** - launches the Streamlit dashboard
 - **DSE Scraper** - runs the market data scraper
 
+## Dashboard tabs
+
+| Tab | Description |
+|-----|-------------|
+| Performance | Top/worst performers, risk-adjusted rankings |
+| Price Trends | Price lines, normalized comparison |
+| Returns Analysis | Return distribution, volatility scatter, momentum |
+| Volume Analysis | Turnover rankings, treemap, daily trend |
+| Stock Comparison | Side-by-side candlestick comparison |
+| Technical Analysis | Candlestick with SMA/EMA, RSI, MACD, Bollinger Bands |
+| Market Intelligence | Order book, volume spikes, breadth, correlation heatmap |
+| Sector Analysis | Sector performance bar chart, treemap, comparison table |
+| Backtesting | Momentum strategy with portfolio value chart |
+
+The sidebar includes a watchlist filter toggle and company/price selectors. Triggered price alerts are shown at the top. Excel and CSV exports are available below the metrics table.
+
 ## Project structure
 
 ```
@@ -158,7 +268,7 @@ market_explorer/
   pyproject.toml          # Package metadata, dependencies, CLI entry points
   dse_explorer/
     __init__.py           # Package exports
-    config.py             # Constants (base URL, company names, column names)
+    config.py             # Constants, sector map, company names
     scraper.py            # HTTP fetching (Playwright + requests)
     parser.py             # HTML parsing and anti-scraping CSS handling
     data.py               # DataFrame operations and CSV output
@@ -167,20 +277,29 @@ market_explorer/
     pipeline.py           # Daily pipeline orchestrator
     pdf_download.py       # Browser-based PDF downloader
     pdf_extract.py        # PDF-to-CSV extractor
-    analyzer.py           # Stock performance analysis
-    dashboard.py          # Streamlit interactive dashboard
+    analyzer.py           # Stock performance analysis + Excel export
+    indicators.py         # Technical indicators (SMA, EMA, RSI, MACD, Bollinger)
+    watchlist.py          # Watchlist management (JSON + CLI)
+    alerts.py             # Price alerts (JSON + CLI + checking)
+    backtest.py           # Momentum backtesting engine
+    backfill.py           # Historical data backfill
+    scheduler.py          # Windows Task Scheduler integration
+    dashboard.py          # Streamlit interactive dashboard (9 tabs)
     shortcuts.py          # Windows desktop shortcut creator
     logger.py             # Logging configuration
 ```
 
-## Output files
+## Data files
 
 | File | Description |
-|---|---|
+|------|-------------|
 | `dse_equity_daily.csv` | Master CSV with all scraped daily equity data |
 | `dse_reports/*.pdf` | Downloaded DSE daily market report PDFs |
 | `reports/dse_equity_*.csv` | Per-date CSVs extracted from PDF reports |
 | `logs/dse_explorer_*.log` | Daily log files |
+| `watchlist.json` | Personal stock watchlist |
+| `alerts.json` | Price alert configuration |
+| `dse_report.xlsx` | Excel export (generated on demand) |
 
 ## License
 

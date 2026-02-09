@@ -5,17 +5,21 @@ Interactive web dashboard for analyzing stock performance.
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
 from datetime import datetime
+from io import BytesIO
+
+from dse_explorer.config import SECTOR_MAP, get_sector
 
 
 # Page config
 st.set_page_config(
     page_title="DSE Stock Analytics",
-    page_icon="📈",
+    page_icon="\U0001F4C8",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -86,7 +90,7 @@ def calculate_metrics(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     # Title
-    st.title("📊 DSE Stock Analytics Dashboard")
+    st.title("\U0001F4CA DSE Stock Analytics Dashboard")
 
     # Load data
     try:
@@ -100,15 +104,44 @@ def main():
     date_min = df['Date'].min()
     date_max = df['Date'].max()
 
+    # ===== ALERTS DISPLAY =====
+    try:
+        from dse_explorer.alerts import check_alerts
+        triggered = check_alerts(df)
+        for alert in triggered:
+            st.warning(
+                f"Alert: {alert['company']} is {alert['condition']} "
+                f"{alert['price']} (current: {alert['current_price']:.2f})"
+            )
+    except Exception:
+        pass
+
     # Sidebar filters
-    st.sidebar.header("🔧 Filters")
+    st.sidebar.header("\U0001F527 Filters")
+
+    # Watchlist toggle
+    watchlist_only = False
+    try:
+        from dse_explorer.watchlist import load_watchlist
+        watchlist = load_watchlist()
+        if watchlist:
+            watchlist_only = st.sidebar.checkbox(
+                f"Show watchlist only ({len(watchlist)} stocks)", value=False
+            )
+    except Exception:
+        watchlist = []
 
     # Company selector
     all_companies = sorted(df['Company'].unique())
+    if watchlist_only and watchlist:
+        default_companies = [c for c in watchlist if c in all_companies]
+    else:
+        default_companies = all_companies[:10]
+
     selected_companies = st.sidebar.multiselect(
         "Select Companies",
         options=all_companies,
-        default=all_companies[:10]
+        default=default_companies
     )
 
     # Price range filter
@@ -130,7 +163,7 @@ def main():
 
     # ===== TOP METRICS ROW =====
     st.markdown("---")
-    st.subheader(f"📅 Market Summary ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b %Y')})")
+    st.subheader(f"\U0001F4C5 Market Summary ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b %Y')})")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -143,15 +176,17 @@ def main():
     col1.metric("Total Stocks", len(metrics))
     col2.metric("Gainers", gainers, f"{gainers/len(metrics)*100:.0f}%")
     col3.metric("Losers", losers, f"-{losers/len(metrics)*100:.0f}%", delta_color="inverse")
-    col4.metric("Avg Return", f"{avg_return:.2f}%")
+    col4.metric(f"Avg Return ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b')})", f"{avg_return:.2f}%")
     col5.metric("Total Turnover", f"TZS {total_turnover/1e9:.2f}B")
 
     # ===== MAIN CHARTS =====
     st.markdown("---")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏆 Performance", "📈 Price Trends", "💹 Returns Analysis",
-        "📊 Volume Analysis", "🎯 Stock Comparison"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        "\U0001F3C6 Performance", "\U0001F4C8 Price Trends", "\U0001F4B9 Returns Analysis",
+        "\U0001F4CA Volume Analysis", "\U0001F3AF Stock Comparison",
+        "\U0001F4C9 Technical Analysis", "\U0001F9E0 Market Intelligence",
+        "\U0001F3ED Sector Analysis", "\U0001F504 Backtesting"
     ])
 
     # TAB 1: Performance Rankings
@@ -159,7 +194,7 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Top Performers")
+            st.subheader(f"Top Performers ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b %Y')})")
             top_10 = filtered_metrics.nlargest(10, 'Total_Return')
 
             fig = px.bar(
@@ -175,7 +210,7 @@ def main():
             st.plotly_chart(fig, width="stretch")
 
         with col2:
-            st.subheader("Worst Performers")
+            st.subheader(f"Worst Performers ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b %Y')})")
             bottom_10 = filtered_metrics.nsmallest(10, 'Total_Return')
 
             fig = px.bar(
@@ -420,9 +455,266 @@ def main():
             fig.update_xaxes(rangeslider_visible=False)
             st.plotly_chart(fig, width="stretch")
 
+    # TAB 6: Technical Analysis
+    with tab6:
+        from dse_explorer.indicators import sma, ema, rsi, macd, bollinger_bands
+
+        st.subheader("Technical Analysis")
+
+        ta_stock = st.selectbox("Select Stock", all_companies, key="ta_stock")
+        stock_data = df[df['Company'] == ta_stock].copy().sort_values('Date').reset_index(drop=True)
+
+        if len(stock_data) < 2:
+            st.warning("Not enough data for technical analysis")
+        else:
+            show_bb = st.checkbox("Show Bollinger Bands", value=False)
+
+            # Candlestick with SMA overlays
+            fig = make_subplots(
+                rows=3, cols=1, shared_xaxes=True,
+                row_heights=[0.5, 0.25, 0.25],
+                subplot_titles=(f'{ta_stock} Price', 'RSI', 'MACD'),
+                vertical_spacing=0.05
+            )
+
+            fig.add_trace(
+                go.Candlestick(
+                    x=stock_data['Date'],
+                    open=stock_data['Opening_Price'],
+                    high=stock_data['High'].where(stock_data['High'] != 0, stock_data['Closing_Price']),
+                    low=stock_data['Low'].where(stock_data['Low'] != 0, stock_data['Closing_Price']),
+                    close=stock_data['Closing_Price'],
+                    name=ta_stock
+                ),
+                row=1, col=1
+            )
+
+            # SMA overlays
+            sma20 = sma(stock_data, period=20)
+            sma50 = sma(stock_data, period=50)
+
+            fig.add_trace(
+                go.Scatter(x=stock_data['Date'], y=sma20, name='SMA 20',
+                           line=dict(color='orange', width=1)),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=stock_data['Date'], y=sma50, name='SMA 50',
+                           line=dict(color='blue', width=1)),
+                row=1, col=1
+            )
+
+            # Bollinger Bands
+            if show_bb:
+                bb = bollinger_bands(stock_data)
+                fig.add_trace(
+                    go.Scatter(x=stock_data['Date'], y=bb['Upper'], name='BB Upper',
+                               line=dict(color='rgba(128,128,128,0.3)'), showlegend=False),
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Scatter(x=stock_data['Date'], y=bb['Lower'], name='BB Lower',
+                               fill='tonexty', fillcolor='rgba(128,128,128,0.1)',
+                               line=dict(color='rgba(128,128,128,0.3)'), showlegend=False),
+                    row=1, col=1
+                )
+
+            # RSI subplot
+            rsi_values = rsi(stock_data)
+            fig.add_trace(
+                go.Scatter(x=stock_data['Date'], y=rsi_values, name='RSI',
+                           line=dict(color='purple', width=1)),
+                row=2, col=1
+            )
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+
+            # MACD subplot
+            macd_data = macd(stock_data)
+            fig.add_trace(
+                go.Scatter(x=stock_data['Date'], y=macd_data['MACD'], name='MACD',
+                           line=dict(color='blue', width=1)),
+                row=3, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=stock_data['Date'], y=macd_data['Signal'], name='Signal',
+                           line=dict(color='orange', width=1)),
+                row=3, col=1
+            )
+            histogram_colors = ['green' if v >= 0 else 'red' for v in macd_data['Histogram']]
+            fig.add_trace(
+                go.Bar(x=stock_data['Date'], y=macd_data['Histogram'], name='Histogram',
+                       marker_color=histogram_colors, showlegend=False),
+                row=3, col=1
+            )
+
+            fig.update_layout(height=700, xaxis3_rangeslider_visible=False)
+            fig.update_xaxes(rangeslider_visible=False)
+            st.plotly_chart(fig, width="stretch")
+
+    # TAB 7: Market Intelligence
+    with tab7:
+        from dse_explorer.analyzer import StockAnalyzer
+
+        st.subheader("Market Intelligence")
+
+        analyzer = StockAnalyzer()
+        analyzer.load_data()
+
+        # Order Book Analysis
+        st.markdown("### Order Book Analysis")
+        order_book = analyzer.analyze_order_book(metrics)
+
+        # Color code pressure
+        def _pressure_color(p):
+            if p == "Strong Buy Pressure":
+                return "background-color: rgba(0,200,0,0.2)"
+            elif p == "Sell Pressure":
+                return "background-color: rgba(200,0,0,0.2)"
+            return ""
+
+        ob_display = order_book.copy()
+        st.dataframe(ob_display, width="stretch", height=300)
+
+        # Bid/Offer ratio bar chart
+        ob_chart = order_book[order_book['Bid_Offer_Ratio'].notna()].copy()
+        if not ob_chart.empty:
+            fig = px.bar(
+                ob_chart, x='Company', y='Bid_Offer_Ratio', color='Pressure',
+                color_discrete_map={
+                    "Strong Buy Pressure": "green",
+                    "Neutral": "gray",
+                    "Sell Pressure": "red"
+                },
+                labels={'Bid_Offer_Ratio': 'Bid/Offer Ratio'}
+            )
+            fig.add_hline(y=1, line_dash="dash", line_color="gray")
+            fig.update_layout(height=350)
+            st.plotly_chart(fig, width="stretch")
+
+        # Volume Spike Alerts
+        st.markdown("### Volume Spike Alerts")
+        vol_spikes = analyzer.detect_volume_spikes()
+        if not vol_spikes.empty:
+            st.dataframe(vol_spikes, width="stretch")
+        else:
+            st.info("No volume spikes detected (threshold: 2x average)")
+
+        # Market Breadth
+        st.markdown("### Market Breadth")
+        breadth = analyzer.market_breadth()
+
+        b_col1, b_col2, b_col3 = st.columns(3)
+        b_col1.metric("Advance / Decline Ratio",
+                       breadth['advance_decline_ratio'] if breadth['advance_decline_ratio'] is not None else "N/A")
+        b_col2.metric("% Positive Return", f"{breadth['pct_positive_return']:.1f}%")
+        b_col3.metric("% Above Period Avg", f"{breadth['pct_above_avg_price']:.1f}%")
+
+        # Correlation Heatmap
+        st.markdown("### Price Correlation Matrix")
+        corr = analyzer.correlation_matrix()
+        # Filter to selected companies if not too many
+        sel_corr = corr.loc[
+            corr.index.isin(selected_companies),
+            corr.columns.isin(selected_companies)
+        ]
+        if not sel_corr.empty:
+            fig = px.imshow(
+                sel_corr,
+                color_continuous_scale='RdBu_r',
+                zmin=-1, zmax=1,
+                labels=dict(color="Correlation")
+            )
+            fig.update_layout(height=500)
+            st.plotly_chart(fig, width="stretch")
+
+    # TAB 8: Sector Analysis
+    with tab8:
+        st.subheader("Sector Analysis")
+
+        # Add sector column to metrics
+        sector_metrics = metrics.copy()
+        sector_metrics['Sector'] = sector_metrics['Company'].apply(get_sector)
+
+        # Sector performance bar chart
+        sector_perf = sector_metrics.groupby('Sector').agg(
+            Avg_Return=('Total_Return', 'mean'),
+            Num_Stocks=('Company', 'count'),
+            Total_Turnover=('Total_Turnover', 'sum')
+        ).reset_index().sort_values('Avg_Return', ascending=False)
+
+        st.markdown("### Sector Performance (Average Return)")
+        fig = px.bar(
+            sector_perf, x='Sector', y='Avg_Return',
+            color='Avg_Return', color_continuous_scale='RdYlGn',
+            labels={'Avg_Return': 'Avg Return (%)'}
+        )
+        fig.update_layout(height=350)
+        st.plotly_chart(fig, width="stretch")
+
+        # Sector treemap by turnover
+        st.markdown("### Sector Market Share (by Turnover)")
+        treemap_sector = sector_metrics[sector_metrics['Total_Turnover'] > 0]
+        fig = px.treemap(
+            treemap_sector,
+            path=['Sector', 'Company'],
+            values='Total_Turnover',
+            color='Total_Return',
+            color_continuous_scale='RdYlGn',
+            color_continuous_midpoint=0
+        )
+        fig.update_layout(height=500)
+        st.plotly_chart(fig, width="stretch")
+
+        # Sector comparison table
+        st.markdown("### Sector Comparison")
+        st.dataframe(sector_perf, width="stretch")
+
+    # TAB 9: Backtesting
+    with tab9:
+        from dse_explorer.backtest import MomentumBacktest
+
+        st.subheader("Momentum Backtesting")
+
+        top_n = st.slider("Number of top stocks to hold", min_value=1, max_value=15, value=5)
+
+        if st.button("Run Backtest"):
+            with st.spinner("Running backtest..."):
+                bt = MomentumBacktest(top_n=top_n)
+                try:
+                    results = bt.run()
+                except Exception as e:
+                    st.error(f"Backtest failed: {e}")
+                    results = None
+
+            if results:
+                st.markdown("### Results")
+                r_col1, r_col2, r_col3, r_col4 = st.columns(4)
+                r_col1.metric("Total Return", f"{results['total_return_pct']:+.2f}%")
+                r_col2.metric("Win Rate", f"{results['win_rate_pct']:.1f}%")
+                r_col3.metric("Max Drawdown", f"{results['max_drawdown_pct']:.2f}%")
+                r_col4.metric("Trading Days", results['trading_days'])
+
+                col_a, col_b = st.columns(2)
+                col_a.metric("Best Day", f"{results['best_day_pct']:+.2f}%")
+                col_b.metric("Worst Day", f"{results['worst_day_pct']:+.2f}%")
+
+                # Portfolio value chart
+                if bt.portfolio_values:
+                    pv_df = pd.DataFrame(bt.portfolio_values)
+                    fig = px.line(
+                        pv_df, x='Date', y='Value',
+                        labels={'Value': 'Portfolio Value', 'Date': ''},
+                        title=f"Portfolio Value (Top {top_n} Momentum Strategy)"
+                    )
+                    fig.add_hline(y=100, line_dash="dash", line_color="gray",
+                                  annotation_text="Starting Value")
+                    fig.update_layout(height=400)
+                    st.plotly_chart(fig, width="stretch")
+
     # ===== DATA TABLE =====
     st.markdown("---")
-    st.subheader("📋 Full Metrics Table")
+    st.subheader("\U0001F4CB Full Metrics Table")
 
     # Format for display
     display_df = filtered_metrics.copy()
@@ -435,18 +727,42 @@ def main():
         height=400
     )
 
-    # Download button
-    csv = filtered_metrics.to_csv(index=False)
-    st.download_button(
-        label="📥 Download Metrics CSV",
-        data=csv,
-        file_name="stock_metrics.csv",
-        mime="text/csv"
-    )
+    # Download buttons
+    dl_col1, dl_col2 = st.columns(2)
+
+    with dl_col1:
+        csv = filtered_metrics.to_csv(index=False)
+        st.download_button(
+            label="\U0001F4E5 Download Metrics CSV",
+            data=csv,
+            file_name="stock_metrics.csv",
+            mime="text/csv"
+        )
+
+    with dl_col2:
+        if st.button("\U0001F4E5 Generate Excel Report"):
+            with st.spinner("Generating Excel report..."):
+                try:
+                    from dse_explorer.analyzer import StockAnalyzer as SA
+                    a = SA()
+                    a.load_data()
+
+                    buf = BytesIO()
+                    a.export_excel(output_path=buf)
+                    buf.seek(0)
+                    st.download_button(
+                        label="\U0001F4E5 Download Excel Report",
+                        data=buf,
+                        file_name="dse_report.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_excel"
+                    )
+                except ImportError:
+                    st.error("openpyxl is required for Excel export. Install it with: pip install openpyxl")
 
     # ===== ANALYTICAL REPORT =====
     st.markdown("---")
-    st.subheader("📝 Analytical Report")
+    st.subheader("\U0001F4DD Analytical Report")
 
     if st.button("Generate Report"):
         from dse_explorer.analyzer import StockAnalyzer
@@ -457,7 +773,7 @@ def main():
             report_md = analyzer.generate_report_markdown()
         st.markdown(report_md)
         st.download_button(
-            label="📥 Download Report",
+            label="\U0001F4E5 Download Report",
             data=report_text,
             file_name="dse_analysis_report.txt",
             mime="text/plain",
