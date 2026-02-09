@@ -154,11 +154,6 @@ def main():
         value=(price_min, price_max)
     )
 
-    # Sidebar: Analytical Report
-    st.sidebar.markdown("---")
-    st.sidebar.header("\U0001F4DD Report")
-    generate_report = st.sidebar.button("Generate Analytical Report")
-
     # Filter metrics
     filtered_metrics = metrics[
         (metrics['Company'].isin(selected_companies)) &
@@ -187,11 +182,12 @@ def main():
     # ===== MAIN CHARTS =====
     st.markdown("---")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "\U0001F3C6 Performance", "\U0001F4C8 Price Trends", "\U0001F4B9 Returns Analysis",
         "\U0001F4CA Volume Analysis", "\U0001F3AF Stock Comparison",
         "\U0001F4C9 Technical Analysis", "\U0001F9E0 Market Intelligence",
-        "\U0001F3ED Sector Analysis", "\U0001F504 Backtesting"
+        "\U0001F3ED Sector Analysis", "\U0001F504 Backtesting",
+        "\U0001F4DD Analytical Report"
     ])
 
     # TAB 1: Performance Rankings
@@ -797,24 +793,24 @@ def main():
                 except ImportError:
                     st.error("openpyxl is required for Excel export. Install it with: pip install openpyxl")
 
-    # ===== ANALYTICAL REPORT (triggered from sidebar) =====
-    if generate_report:
-        st.markdown("---")
-        st.subheader("\U0001F4DD Analytical Report")
-        from dse_explorer.analyzer import StockAnalyzer
-        with st.spinner("Generating report..."):
-            analyzer = StockAnalyzer()
-            analyzer.load_data()
-            report_text = analyzer.generate_report(output_path="report.txt")
-            report_md = analyzer.generate_report_markdown()
-        st.markdown(report_md)
-        st.download_button(
-            label="\U0001F4E5 Download Report",
-            data=report_text,
-            file_name="dse_analysis_report.txt",
-            mime="text/plain",
-            key="download_report"
-        )
+    # TAB 10: Analytical Report
+    with tab10:
+        st.subheader("Analytical Report")
+        if st.button("Generate Report"):
+            from dse_explorer.analyzer import StockAnalyzer
+            with st.spinner("Generating report..."):
+                a = StockAnalyzer()
+                a.load_data()
+                report_text = a.generate_report(output_path="report.txt")
+                report_md = a.generate_report_markdown()
+            st.markdown(report_md)
+            st.download_button(
+                label="\U0001F4E5 Download Report",
+                data=report_text,
+                file_name="dse_analysis_report.txt",
+                mime="text/plain",
+                key="download_report"
+            )
 
     # Footer
     st.markdown("---")
