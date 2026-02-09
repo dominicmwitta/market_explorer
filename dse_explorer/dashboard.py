@@ -867,8 +867,166 @@ def main():
                 a = StockAnalyzer()
                 a.load_data()
                 report_text = a.generate_report(output_path="report.txt")
-                report_md = a.generate_report_markdown()
-            st.markdown(report_md)
+                m = a.calculate_metrics()
+
+            rpt_date_min = a.df['Date'].min().strftime('%d-%b-%Y')
+            rpt_date_max = a.df['Date'].max().strftime('%d-%b-%Y')
+            rpt_days = a.df['Date'].nunique()
+
+            st.markdown(f"**Generated:** {a.analysis_date}  ")
+            st.markdown(f"**Data Period:** {rpt_date_min} to {rpt_date_max} ({rpt_days} trading days)  ")
+            st.markdown(f"**Total Stocks Analyzed:** {len(m)}")
+
+            # Market Overview
+            gainers_r = (m['Total_Return_Pct'] > 0).sum()
+            losers_r = (m['Total_Return_Pct'] < 0).sum()
+            unchanged_r = (m['Total_Return_Pct'] == 0).sum()
+            st.markdown(f"## Market Overview ({rpt_date_min} to {rpt_date_max})")
+            ov_col1, ov_col2, ov_col3, ov_col4 = st.columns(4)
+            ov_col1.metric("Gainers", f"{gainers_r}")
+            ov_col2.metric("Losers", f"{losers_r}")
+            ov_col3.metric("Unchanged", f"{unchanged_r}")
+            ov_col4.metric("Avg Return", f"{m['Total_Return_Pct'].mean():.2f}%")
+
+            # Top Performers
+            st.markdown("## Top 10 Best Performers")
+            top_ret = a.get_top_performers(m, 'Total_Return_Pct', 10)
+            st.dataframe(
+                top_ret[['Company', 'Total_Return_Pct', 'Current_Price', 'Volatility_Pct', 'Total_Turnover']].rename(
+                    columns={'Total_Return_Pct': 'Return %', 'Current_Price': 'Price (TZS)',
+                             'Volatility_Pct': 'Volatility %', 'Total_Turnover': 'Turnover (TZS)'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Worst Performers
+            st.markdown("## Top 10 Worst Performers")
+            worst_ret = a.get_top_performers(m, 'Total_Return_Pct', 10, ascending=True)
+            st.dataframe(
+                worst_ret[['Company', 'Total_Return_Pct', 'Current_Price', 'Volatility_Pct', 'Total_Turnover']].rename(
+                    columns={'Total_Return_Pct': 'Return %', 'Current_Price': 'Price (TZS)',
+                             'Volatility_Pct': 'Volatility %', 'Total_Turnover': 'Turnover (TZS)'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Most Actively Traded
+            st.markdown("## Top 10 Most Actively Traded")
+            top_turn = a.get_top_performers(m, 'Total_Turnover', 10)
+            st.dataframe(
+                top_turn[['Company', 'Total_Turnover', 'Total_Return_Pct', 'Liquidity_Ratio']].rename(
+                    columns={'Total_Turnover': 'Turnover (TZS)', 'Total_Return_Pct': 'Return %',
+                             'Liquidity_Ratio': 'Liquidity %'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Risk-Adjusted (Sharpe)
+            st.markdown("## Top 10 Risk-Adjusted Performers (Sharpe Ratio)")
+            tradeable_r = m[m['Volatility_Pct'] > 0]
+            top_sharpe = a.get_top_performers(tradeable_r, 'Sharpe_Ratio', 10)
+            st.dataframe(
+                top_sharpe[['Company', 'Sharpe_Ratio', 'Total_Return_Pct', 'Volatility_Pct', 'Current_Price']].rename(
+                    columns={'Sharpe_Ratio': 'Sharpe', 'Total_Return_Pct': 'Return %',
+                             'Volatility_Pct': 'Volatility %', 'Current_Price': 'Price (TZS)'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Most Volatile
+            st.markdown("## Top 10 Most Volatile Stocks")
+            top_vol = a.get_top_performers(m, 'Volatility_Pct', 10)
+            st.dataframe(
+                top_vol[['Company', 'Volatility_Pct', 'Total_Return_Pct', 'Price_Range_Pct']].rename(
+                    columns={'Volatility_Pct': 'Volatility %', 'Total_Return_Pct': 'Return %',
+                             'Price_Range_Pct': 'Price Range %'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Latest Day Momentum
+            st.markdown("## Latest Day Momentum")
+            top_mom = a.get_top_performers(m, 'Latest_Return_Pct', 10)
+            st.dataframe(
+                top_mom[['Company', 'Latest_Return_Pct', 'Current_Price', 'Total_Return_Pct']].rename(
+                    columns={'Latest_Return_Pct': 'Today %', 'Current_Price': 'Price (TZS)',
+                             'Total_Return_Pct': 'Total Return %'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Order Book Analysis
+            st.markdown("## Order Book Analysis")
+            order_book = a.analyze_order_book(m)
+            st.dataframe(
+                order_book[['Company', 'Outstanding_Bids', 'Outstanding_Offers', 'Bid_Offer_Ratio', 'Pressure']].rename(
+                    columns={'Outstanding_Bids': 'Bids', 'Outstanding_Offers': 'Offers',
+                             'Bid_Offer_Ratio': 'Ratio'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Volume Spikes
+            vol_spikes = a.detect_volume_spikes()
+            if not vol_spikes.empty:
+                st.markdown("## Volume Spike Alerts (>= 2x Average)")
+                st.dataframe(
+                    vol_spikes[['Company', 'Latest_Volume', 'Avg_Volume', 'Spike_Ratio']].rename(
+                        columns={'Latest_Volume': 'Latest Volume', 'Avg_Volume': 'Avg Volume',
+                                 'Spike_Ratio': 'Spike Ratio'}),
+                    hide_index=True, width="stretch"
+                )
+
+            # Market Breadth
+            breadth_r = a.market_breadth()
+            st.markdown("## Market Breadth")
+            br_col1, br_col2, br_col3 = st.columns(3)
+            br_col1.metric("Advancing", breadth_r['gainers'])
+            br_col2.metric("Declining", breadth_r['losers'])
+            ad_r = breadth_r['advance_decline_ratio']
+            br_col3.metric("A/D Ratio", ad_r if ad_r is not None else "N/A")
+
+            # Sector Performance
+            st.markdown("## Sector Performance")
+            sector_perf_r = a.sector_performance()
+            st.dataframe(
+                sector_perf_r.rename(columns={
+                    'Avg_Return': 'Avg Return %', 'Num_Stocks': 'Stocks',
+                    'Total_Turnover': 'Total Turnover (TZS)'}),
+                hide_index=True, width="stretch"
+            )
+
+            # Investment Insights (narrative)
+            st.markdown("## Investment Insights")
+            strong = m[
+                (m['Total_Return_Pct'] > 0) &
+                (m['Liquidity_Ratio'] >= 100) &
+                (m['Volatility_Pct'] > 0)
+            ].nlargest(5, 'Sharpe_Ratio')
+            if len(strong) > 0:
+                st.markdown("**Strong Performers** (Good returns with high liquidity):")
+                for _, row in strong.iterrows():
+                    st.markdown(
+                        f"- **{row['Company']}**: Return {row['Total_Return_Pct']:+.2f}%, "
+                        f"Sharpe {row['Sharpe_Ratio']:.3f}, "
+                        f"Turnover TZS {row['Total_Turnover']:,.0f}"
+                    )
+
+            hot = m[m['Latest_Return_Pct'] > 2].nlargest(3, 'Latest_Return_Pct')
+            if len(hot) > 0:
+                st.markdown("**High Momentum** (Latest day gains > 2%):")
+                for _, row in hot.iterrows():
+                    st.markdown(f"- **{row['Company']}**: +{row['Latest_Return_Pct']:.2f}% today")
+
+            value = m[
+                (m['Total_Return_Pct'] < -5) &
+                (m['Liquidity_Ratio'] >= 100)
+            ].nsmallest(3, 'Total_Return_Pct')
+            if len(value) > 0:
+                st.markdown("**Potential Value Plays** (Oversold but liquid):")
+                for _, row in value.iterrows():
+                    st.markdown(
+                        f"- **{row['Company']}**: {row['Total_Return_Pct']:.2f}% "
+                        f"(Price: TZS {row['Current_Price']:,.0f})"
+                    )
+
+            st.markdown("---")
+            st.caption("*DISCLAIMER: This report is for informational purposes only. "
+                       "Past performance does not guarantee future results.*")
+
             st.download_button(
                 label="\U0001F4E5 Download Report",
                 data=report_text,
