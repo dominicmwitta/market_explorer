@@ -613,17 +613,22 @@ def main():
         # Correlation Heatmap
         st.markdown("### Price Correlation Matrix")
         corr = analyzer.correlation_matrix()
-        # Filter to selected companies if not too many
+        # Filter to selected companies
         sel_corr = corr.loc[
             corr.index.isin(selected_companies),
             corr.columns.isin(selected_companies)
         ]
-        if not sel_corr.empty:
+        # Drop stocks with no correlation data (e.g. no trades)
+        valid = sel_corr.dropna(how="all").dropna(axis=1, how="all")
+        if not valid.empty:
+            # Lower triangular mask (hide upper triangle and diagonal)
+            mask = np.triu(np.ones_like(valid, dtype=bool))
+            lower = valid.where(~mask)
             fig = px.imshow(
-                sel_corr,
+                lower,
                 color_continuous_scale='RdBu_r',
                 zmin=-1, zmax=1,
-                labels=dict(color="Correlation")
+                labels=dict(color="Correlation"),
             )
             fig.update_layout(height=500)
             st.plotly_chart(fig, width="stretch")
@@ -698,6 +703,33 @@ def main():
                 col_a, col_b = st.columns(2)
                 col_a.metric("Best Day", f"{results['best_day_pct']:+.2f}%")
                 col_b.metric("Worst Day", f"{results['worst_day_pct']:+.2f}%")
+
+                # Latest holdings
+                if bt.daily_holdings:
+                    latest = bt.daily_holdings[-1]
+                    st.markdown(f"### Stocks to Hold ({latest['Date'].strftime('%Y-%m-%d')})")
+                    holdings_rows = []
+                    for d in latest["Details"]:
+                        holdings_rows.append({
+                            "Stock": d["Stock"],
+                            "Weight": f"{100 / len(latest['Details']):.1f}%",
+                            "Prev Day Return": f"{d['Prev_Return_Pct']:+.2f}%",
+                            "Day Return": f"{d['Day_Return_Pct']:+.2f}%" if d["Day_Return_Pct"] is not None else "N/A",
+                        })
+                    st.dataframe(pd.DataFrame(holdings_rows), hide_index=True, width="stretch")
+
+                # Holdings history
+                if bt.daily_holdings:
+                    st.markdown("### Daily Holdings History")
+                    history_rows = []
+                    for entry in bt.daily_holdings:
+                        history_rows.append({
+                            "Date": entry["Date"].strftime("%Y-%m-%d"),
+                            "Stocks Held": ", ".join(entry["Stocks"]),
+                            "Portfolio Return": f"{entry['Portfolio_Return_Pct']:+.2f}%",
+                        })
+                    hist_df = pd.DataFrame(history_rows)
+                    st.dataframe(hist_df, hide_index=True, height=300, width="stretch")
 
                 # Portfolio value chart
                 if bt.portfolio_values:

@@ -14,6 +14,7 @@ class MomentumBacktest:
         self.top_n = top_n
         self.df = None
         self.portfolio_values: list[dict] = []
+        self.daily_holdings: list[dict] = []
 
     def _load(self) -> pd.DataFrame:
         df = pd.read_csv(self.csv_path)
@@ -41,6 +42,8 @@ class MomentumBacktest:
         values = [{"Date": prices.index[0], "Value": portfolio_value}]
         daily_returns = []
 
+        holdings_log = []
+
         for i, date in enumerate(dates):
             if i == 0:
                 # No previous return to rank on the first tradeable day
@@ -66,7 +69,25 @@ class MomentumBacktest:
             portfolio_value *= (1 + daily_ret)
             values.append({"Date": date, "Value": portfolio_value})
 
+            # Record which stocks are held and their individual returns
+            stock_details = []
+            for stock in top_stocks:
+                ret = returns.loc[date, stock]
+                prev_ret = prev_returns[stock]
+                stock_details.append({
+                    "Stock": stock,
+                    "Prev_Return_Pct": round(prev_ret * 100, 2),
+                    "Day_Return_Pct": round(ret * 100, 2) if pd.notna(ret) else None,
+                })
+            holdings_log.append({
+                "Date": date,
+                "Stocks": [s["Stock"] for s in stock_details],
+                "Details": stock_details,
+                "Portfolio_Return_Pct": round(daily_ret * 100, 2),
+            })
+
         self.portfolio_values = values
+        self.daily_holdings = holdings_log
         daily_returns = np.array(daily_returns)
 
         # Summary stats
@@ -116,6 +137,20 @@ def main():
     print(f"Max Drawdown: {results['max_drawdown_pct']:.2f}%")
     print(f"Best Day: {results['best_day_pct']:+.2f}%")
     print(f"Worst Day: {results['worst_day_pct']:+.2f}%")
+
+    if bt.daily_holdings:
+        latest = bt.daily_holdings[-1]
+        print()
+        print("=" * 50)
+        print(f"LATEST HOLDINGS ({latest['Date'].strftime('%Y-%m-%d')})")
+        print("=" * 50)
+        print(f"{'Stock':<15} {'Prev Day %':>12} {'Day Return %':>14}")
+        print("-" * 43)
+        for detail in latest["Details"]:
+            day_ret = f"{detail['Day_Return_Pct']:+.2f}%" if detail["Day_Return_Pct"] is not None else "N/A"
+            print(f"{detail['Stock']:<15} {detail['Prev_Return_Pct']:>+11.2f}% {day_ret:>14}")
+        print("-" * 43)
+        print(f"{'Portfolio':.<15} {'':>12} {latest['Portfolio_Return_Pct']:>+13.2f}%")
     return 0
 
 
