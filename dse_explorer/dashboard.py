@@ -175,7 +175,7 @@ def main():
 
     col1.metric("Total Stocks", len(metrics))
     col2.metric("Gainers", gainers, f"{gainers/len(metrics)*100:.0f}%")
-    col3.metric("Losers", losers, f"-{losers/len(metrics)*100:.0f}%", delta_color="inverse")
+    col3.metric("Losers", losers, f"-{losers/len(metrics)*100:.0f}%", delta_color="normal")
     col4.metric(f"Avg Return ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b')})", f"{avg_return:.2f}%")
     col5.metric("Total Turnover", f"TZS {total_turnover/1e9:.2f}B")
 
