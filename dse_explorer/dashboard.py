@@ -154,6 +154,11 @@ def main():
         value=(price_min, price_max)
     )
 
+    # Sidebar: Analytical Report
+    st.sidebar.markdown("---")
+    st.sidebar.header("\U0001F4DD Report")
+    generate_report = st.sidebar.button("Generate Analytical Report")
+
     # Filter metrics
     filtered_metrics = metrics[
         (metrics['Company'].isin(selected_companies)) &
@@ -792,11 +797,10 @@ def main():
                 except ImportError:
                     st.error("openpyxl is required for Excel export. Install it with: pip install openpyxl")
 
-    # ===== ANALYTICAL REPORT =====
-    st.markdown("---")
-    st.subheader("\U0001F4DD Analytical Report")
-
-    if st.button("Generate Report"):
+    # ===== ANALYTICAL REPORT (triggered from sidebar) =====
+    if generate_report:
+        st.markdown("---")
+        st.subheader("\U0001F4DD Analytical Report")
         from dse_explorer.analyzer import StockAnalyzer
         with st.spinner("Generating report..."):
             analyzer = StockAnalyzer()
