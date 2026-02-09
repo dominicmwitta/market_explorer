@@ -182,21 +182,35 @@ def main():
     # ===== MAIN CHARTS =====
     st.markdown("---")
 
-    # Style tab ribbon: wrap into two rows with grey background
+    # Style tab ribbon: two evenly-spaced rows with grey background
     st.markdown("""
     <style>
-    /* Tab list: wrap and grey background */
+    /* Tab list: wrap into rows, grey background */
     div[data-baseweb="tab-list"] {
         flex-wrap: wrap;
         background-color: #f0f2f6;
         border-radius: 8px;
-        padding: 4px;
-        gap: 2px;
+        padding: 6px;
+        gap: 6px 4px;
     }
-    /* Individual tab buttons */
+    /* Each tab: equal width (5 per row), centered text */
     div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
-        flex: 0 1 auto;
+        flex: 1 1 18%;
         white-space: nowrap;
+        text-align: center;
+        justify-content: center;
+        border-radius: 6px;
+        padding: 8px 4px;
+    }
+    /* Subtle highlight on the active tab */
+    div[data-baseweb="tab-list"] button[aria-selected="true"] {
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-radius: 6px;
+    }
+    /* Hide the default underline highlight bar */
+    div[data-baseweb="tab-highlight"] {
+        display: none;
     }
     </style>
     """, unsafe_allow_html=True)
