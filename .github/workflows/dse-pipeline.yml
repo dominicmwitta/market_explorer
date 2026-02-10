@@ -1,0 +1,43 @@
+name: DSE Daily Pipeline
+
+on:
+  schedule:
+    # 3:00 PM UTC = 6:00 PM EAT, Monday–Friday
+    - cron: '0 15 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Write email config from secrets
+        if: ${{ secrets.GMAIL_ADDRESS != '' }}
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          printf '{"gmail_address":"%s","app_password":"%s","enabled":true}\n' \
+            "$GMAIL_ADDRESS" "$GMAIL_APP_PASSWORD" > email_config.json
+
+      - name: Run pipeline
+        run: dse-pipeline
+
+      - name: Commit updated CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dse_equity_daily.csv
+          git diff --cached --quiet || git commit -m "Daily equity data update [skip ci]"
+          git push
