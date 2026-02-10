@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from .config import BASE_URL, COMPANY_NAMES, COLUMN_NAMES
+from .config import BASE_URL, COLUMN_NAMES
 from .scraper import fetch_page
 from .logger import get_logger
 
@@ -69,15 +69,15 @@ def _extract_market_date(soup):
 def _find_equity_table(soup):
     """Locate the equity <table> on the DSE homepage.
 
-    The page has an ``id="equity"`` section; we look for the first
-    <table> inside (or near) that anchor.
+    Prefers ``#equity-watch`` (includes ETFs) over ``#equity`` (equities only).
     """
-    # Try #equity section first
-    equity_section = soup.find(id="equity")
-    if equity_section:
-        table = equity_section.find("table")
-        if table:
-            return table
+    # Prefer #equity-watch (equities + ETFs)
+    for section_id in ("equity-watch", "equity"):
+        section = soup.find(id=section_id)
+        if section:
+            table = section.find("table")
+            if table:
+                return table
 
     # Fallback: look for a table whose header row contains "Symbol"
     for table in soup.find_all("table"):
@@ -137,7 +137,7 @@ def scrape_equity_table(soup=None):
         return None
 
     # --- Parse data rows ---
-    company_set = set(COMPANY_NAMES)
+    _TICKER_RE = re.compile(r'^[A-Z][A-Z0-9]+([ -][A-Z][A-Z0-9]*)*$')
     records = []
 
     for tr in rows[1:]:
@@ -146,7 +146,7 @@ def scrape_equity_table(soup=None):
             continue
 
         symbol = cells[col_index["Company"]].get_text(strip=True).upper()
-        if symbol not in company_set:
+        if not _TICKER_RE.match(symbol):
             continue
 
         record = {"Date": report_date, "Company": symbol}

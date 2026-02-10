@@ -4,8 +4,9 @@ import re
 import datetime
 from bs4 import NavigableString, Tag
 
-from .config import COMPANY_NAMES
 from .scraper import fetch_page
+
+_TICKER_RE = re.compile(r'^[A-Z][A-Z0-9-]+$')
 
 
 def parse_css_positions(soup):
@@ -143,43 +144,49 @@ def extract_equity_data(url):
 
         first_token = tokens[0]
 
-        for company in COMPANY_NAMES:
-            if first_token == company:
-                value_tokens = tokens[1:]
+        if _TICKER_RE.match(first_token):
+            # Absorb trailing uppercase-only words into the company name
+            # (e.g. "ITRUST" + "ETF" -> "ITRUST ETF")
+            name_parts = [first_token]
+            idx = 1
+            while idx < len(tokens) and re.match(r'^[A-Z]+$', tokens[idx]):
+                name_parts.append(tokens[idx])
+                idx += 1
+            company = ' '.join(name_parts)
+            value_tokens = tokens[idx:]
 
-                # Filter to only numeric values
-                numeric_values = []
-                for v in value_tokens:
-                    v = v.strip()
-                    if v and re.match(r'^[\d,]+(\.\d+)?$', v):
-                        numeric_values.append(v)
+            # Filter to only numeric values
+            numeric_values = []
+            for v in value_tokens:
+                v = v.strip()
+                if v and re.match(r'^[\d,]+(\.\d+)?$', v):
+                    numeric_values.append(v)
 
-                # Validate results - if suspicious, try CSS position fallback
-                if not validate_values(numeric_values, company) and css_positions:
-                    # Fallback: extract by CSS x-position
-                    css_tokens = extract_by_css_position(div, css_positions)
+            # Validate results - if suspicious, try CSS position fallback
+            if not validate_values(numeric_values, company) and css_positions:
+                # Fallback: extract by CSS x-position
+                css_tokens = extract_by_css_position(div, css_positions)
 
-                    if css_tokens and css_tokens[0] == company:
-                        css_value_tokens = css_tokens[1:]
-                        css_numeric = []
-                        for v in css_value_tokens:
-                            v = v.strip()
-                            if v and re.match(r'^[\d,]+(\.\d+)?$', v):
-                                css_numeric.append(v)
+                if css_tokens and css_tokens[0] == company:
+                    css_value_tokens = css_tokens[1:]
+                    css_numeric = []
+                    for v in css_value_tokens:
+                        v = v.strip()
+                        if v and re.match(r'^[\d,]+(\.\d+)?$', v):
+                            css_numeric.append(v)
 
-                        # Use CSS method if it gives better results
-                        if validate_values(css_numeric, company):
-                            numeric_values = css_numeric
-                            full_text = ' '.join(css_tokens)
+                    # Use CSS method if it gives better results
+                    if validate_values(css_numeric, company):
+                        numeric_values = css_numeric
+                        full_text = ' '.join(css_tokens)
 
-                if numeric_values:
-                    raw_text = full_text.strip()
-                    all_rows.append({
-                        'company': company,
-                        'raw': raw_text,
-                        'values': numeric_values
-                    })
-                break
+            if numeric_values:
+                raw_text = full_text.strip()
+                all_rows.append({
+                    'company': company,
+                    'raw': raw_text,
+                    'values': numeric_values
+                })
 
     return all_rows
 

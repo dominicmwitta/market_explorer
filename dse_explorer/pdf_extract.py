@@ -19,13 +19,7 @@ EQUITY_COLUMNS = [
     "Volume", "Market_Cap",
 ]
 
-# Known company tickers (equity + ETF)
-COMPANY_TICKERS = {
-    "AFRIPRISE", "CRDB", "DCB", "DSE", "EABL", "JATU", "JHL", "KA", "KCB",
-    "MBP", "MCB", "MKCB", "MUCOBA", "NICO", "NMB", "NMG", "PAL", "SWALA",
-    "SWIS", "TBL", "TCC", "TCCL", "TOL", "TPCC", "TTP", "USL", "VODA", "YETU",
-    "IEACLC-ETF", "VERTEX-ETF",
-}
+_TICKER_RE = re.compile(r'^[A-Z][A-Z0-9-]+$')
 
 
 def find_latest_pdf():
@@ -90,18 +84,22 @@ def parse_data_line(line):
         return None
 
     # Match company ticker at start of line
-    company = None
-    rest = None
-    for ticker in sorted(COMPANY_TICKERS, key=len, reverse=True):
-        if line.startswith(ticker):
-            after = line[len(ticker):]
-            # Must be followed by whitespace or digit
-            if after and (after[0].isspace() or after[0].isdigit()):
-                company = ticker
-                rest = after.strip()
-                break
+    # Absorb trailing uppercase-only words into the ticker name
+    # (e.g. "ITRUST ETF 1200 ..." -> company="ITRUST ETF")
+    parts = line.split()
+    if len(parts) < 2:
+        return None
+    if not _TICKER_RE.match(parts[0]):
+        return None
+    name_parts = [parts[0]]
+    idx = 1
+    while idx < len(parts) and re.match(r'^[A-Z]+$', parts[idx]):
+        name_parts.append(parts[idx])
+        idx += 1
+    company = ' '.join(name_parts)
+    rest = ' '.join(parts[idx:])
 
-    if not company or not rest:
+    if not rest:
         return None
 
     # Extract all numbers (integers with commas, or decimals)
