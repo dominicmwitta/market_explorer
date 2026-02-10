@@ -212,12 +212,7 @@ def extract_equity_prices(pdf_path=None):
         df = pd.DataFrame(rows, columns=EQUITY_COLUMNS)
         df = df.sort_values("Company").reset_index(drop=True)
 
-        # Save CSV
-        csv_name = f"dse_equity_{report_date}.csv"
-        csv_path = OUTPUT_DIR / csv_name
-        df.to_csv(csv_path, index=False)
-
-        print(f"\nExtracted {len(df)} companies -> {csv_path}")
+        print(f"\nExtracted {len(df)} companies for {report_date}")
         print(df.to_string(index=False))
         return df
 
