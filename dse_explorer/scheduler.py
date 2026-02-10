@@ -1,6 +1,7 @@
 """Windows Task Scheduler integration for automated daily pipeline runs."""
 
 import argparse
+import os
 import subprocess
 import sys
 import shutil
@@ -17,15 +18,20 @@ def _find_dse_pipeline() -> str:
     return f'"{sys.executable}" -m dse_explorer.pipeline'
 
 
-def install_schedule(time: str = "18:00") -> bool:
+def install_schedule(time: str = "18:00",
+                     working_dir: str | None = None) -> bool:
     """Create a daily Windows scheduled task."""
     cmd_to_run = _find_dse_pipeline()
+    work_dir = working_dir or os.getcwd()
+
+    # Wrap command so it runs from the correct directory
+    wrapped_cmd = f'cmd /c "cd /d {work_dir} && {cmd_to_run}"'
 
     result = subprocess.run(
         [
             "schtasks", "/Create",
             "/TN", TASK_NAME,
-            "/TR", cmd_to_run,
+            "/TR", wrapped_cmd,
             "/SC", "DAILY",
             "/ST", time,
             "/F",  # force overwrite if exists
@@ -35,6 +41,7 @@ def install_schedule(time: str = "18:00") -> bool:
 
     if result.returncode == 0:
         print(f"Scheduled task '{TASK_NAME}' created to run daily at {time}")
+        print(f"Working directory: {work_dir}")
         return True
     else:
         print(f"Failed to create scheduled task: {result.stderr.strip()}")

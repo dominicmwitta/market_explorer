@@ -3,6 +3,8 @@
 import argparse
 import json
 import smtplib
+import socket
+import ssl
 from datetime import datetime
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -11,7 +13,7 @@ from dse_explorer.logger import get_logger
 
 CONFIG_FILE = Path("email_config.json")
 SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_PORT = 465
 
 log = get_logger()
 
@@ -57,16 +59,31 @@ def send_email(subject: str, body: str) -> bool:
     msg["From"] = sender
     msg["To"] = sender  # send to self
 
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
-            server.starttls()
+    # Try SMTP_SSL (port 465), then fall back to STARTTLS (port 587)
+    for attempt, connect in enumerate([
+        lambda: smtplib.SMTP_SSL(SMTP_SERVER, 465, timeout=30),
+        lambda: smtplib.SMTP(SMTP_SERVER, 587, timeout=30),
+    ]):
+        try:
+            server = connect()
+            server.ehlo("localhost")
+            if attempt == 1:  # STARTTLS path
+                server.starttls()
+                server.ehlo("localhost")
             server.login(sender, config["app_password"])
             server.send_message(msg)
-        log.info(f"Email sent: {subject}")
-        return True
-    except Exception as e:
-        log.error(f"Failed to send email: {e}")
-        return False
+            server.quit()
+            log.info(f"Email sent: {subject}")
+            return True
+        except Exception as e:
+            log.debug(f"SMTP attempt {attempt + 1} failed: {e}")
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+    log.error("Failed to send email: all SMTP methods failed")
+    return False
 
 
 def notify_pipeline_result(success: bool, details: dict) -> bool:
@@ -139,6 +156,96 @@ def notify_alerts(triggered_alerts: list[dict]) -> bool:
     return send_email(subject, body)
 
 
+def diagnose() -> None:
+    """Step-by-step connection test with detailed output."""
+    config = load_email_config()
+    if not config:
+        print("Not configured. Run 'dse-notify --configure' first.")
+        return
+
+    sender = config["gmail_address"]
+    print(f"Gmail: {sender}")
+    print()
+
+    # Step 1: DNS resolution
+    print("[1/4] Resolving smtp.gmail.com ...")
+    try:
+        ip = socket.getaddrinfo(SMTP_SERVER, SMTP_PORT)[0][4][0]
+        print(f"  OK — resolved to {ip}")
+    except Exception as e:
+        print(f"  FAIL — DNS resolution error: {e}")
+        return
+
+    # Step 2: TCP connection
+    print(f"[2/4] TCP connect to {SMTP_SERVER}:{SMTP_PORT} ...")
+    try:
+        sock = socket.create_connection((SMTP_SERVER, SMTP_PORT), timeout=15)
+        print(f"  OK — connected")
+        sock.close()
+    except Exception as e:
+        print(f"  FAIL — {e}")
+        print("  -> Port may be blocked by firewall or antivirus")
+        return
+
+    # Step 3 & 4: Try both connection methods
+    methods = [
+        ("SSL (port 465)", 465, True),
+        ("STARTTLS (port 587)", 587, False),
+    ]
+    for label, port, use_ssl in methods:
+        print(f"[3/4] {label} — connecting ...")
+        server = None
+        try:
+            if use_ssl:
+                server = smtplib.SMTP_SSL(SMTP_SERVER, port, timeout=15)
+            else:
+                server = smtplib.SMTP(SMTP_SERVER, port, timeout=15)
+            code, resp = server.ehlo("localhost")
+            print(f"  OK — EHLO response: {code}")
+            if not use_ssl:
+                server.starttls()
+                server.ehlo("localhost")
+                print("  OK — STARTTLS upgraded")
+        except Exception as e:
+            print(f"  FAIL — {e}")
+            if server:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
+            continue
+
+        print(f"[4/4] {label} — authenticating ...")
+        try:
+            server.login(sender, config["app_password"])
+            print("  OK — login successful!")
+            server.quit()
+            print()
+            print(f"All checks passed with {label}!")
+            return
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"  FAIL — {e}")
+            print("  -> Wrong credentials. Use an App Password, not your Gmail password.")
+            print("     Generate one at: https://myaccount.google.com/apppasswords")
+            try:
+                server.quit()
+            except Exception:
+                pass
+            return
+        except Exception as e:
+            print(f"  FAIL — {type(e).__name__}: {e}")
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+    print()
+    print("Both methods failed. Check that:")
+    print("  1. 2-Step Verification is ON in your Google account")
+    print("  2. You generated an App Password (not regular password)")
+    print("  3. No antivirus/firewall is intercepting SMTP traffic")
+
+
 def configure() -> None:
     """Interactive CLI to set up email credentials."""
     print("Gmail Email Notification Setup")
@@ -171,6 +278,8 @@ def main():
                         help="Set up Gmail credentials interactively")
     parser.add_argument("--test", action="store_true",
                         help="Send a test email to verify setup")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="Step-by-step connection diagnostic")
     parser.add_argument("--enable", action="store_true",
                         help="Enable email notifications")
     parser.add_argument("--disable", action="store_true",
@@ -182,6 +291,8 @@ def main():
 
     if args.configure:
         configure()
+    elif args.diagnose:
+        diagnose()
     elif args.test:
         config = load_email_config()
         if not config:
