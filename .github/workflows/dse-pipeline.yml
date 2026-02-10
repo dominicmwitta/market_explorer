@@ -23,7 +23,6 @@ jobs:
         run: pip install -e .
 
       - name: Write email config from secrets
-        if: ${{ secrets.GMAIL_ADDRESS != '' }}
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
