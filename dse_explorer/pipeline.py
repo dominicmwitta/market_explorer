@@ -184,17 +184,43 @@ def main():
     log.info("DSE Daily Pipeline Started")
     log.info("=" * 60)
 
+    errors = []
+    source = "none"
+
     scraper_df = try_scraper()
     pdf_df = try_pdf()
 
+    # Determine which source was used
+    if scraper_df is not None and pdf_df is not None:
+        source = "scraper+PDF"
+    elif scraper_df is not None:
+        source = "scraper"
+    elif pdf_df is not None:
+        source = "PDF"
+    else:
+        errors.append("Both scraper and PDF extraction failed")
+
     result = pick_best(scraper_df, pdf_df)
     if result is None:
+        # Notify failure and exit
+        try:
+            from dse_explorer.notifier import notify_pipeline_result
+            notify_pipeline_result(False, {
+                "source": source,
+                "rows_scraped": 0,
+                "total_rows": 0,
+                "errors": errors,
+            })
+        except Exception as e:
+            log.debug(f"Email notification skipped: {e}")
         return
 
+    rows_scraped = len(result)
     final = update_master_csv(result)
     print(final.to_string())
 
     # Check price alerts
+    triggered = []
     try:
         from dse_explorer.alerts import check_alerts
         triggered = check_alerts(final)
@@ -206,7 +232,28 @@ def main():
     except Exception as e:
         log.debug(f"Alert check skipped: {e}")
 
+    # Email triggered alerts
+    if triggered:
+        try:
+            from dse_explorer.notifier import notify_alerts
+            notify_alerts(triggered)
+        except Exception as e:
+            log.debug(f"Alert email skipped: {e}")
+
     log.info("DSE Daily Pipeline Completed")
+
+    # Send pipeline summary email
+    try:
+        from dse_explorer.notifier import notify_pipeline_result
+        notify_pipeline_result(True, {
+            "source": source,
+            "rows_scraped": rows_scraped,
+            "total_rows": len(final),
+            "alerts_triggered": len(triggered),
+            "errors": errors,
+        })
+    except Exception as e:
+        log.debug(f"Email notification skipped: {e}")
 
 
 if __name__ == "__main__":

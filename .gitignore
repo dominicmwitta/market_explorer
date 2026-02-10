@@ -32,5 +32,8 @@ logs/
 dist/
 build/
 
+# Credentials
+email_config.json
+
 # Misc
 nul
