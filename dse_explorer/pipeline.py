@@ -10,6 +10,7 @@ from dse_explorer import (
 from dse_explorer.scraper import close_browser
 from dse_explorer.logger import get_logger
 from dse_explorer.scrape import scrape_report
+from dse_explorer.equity_scraper import scrape_equity_table
 from dse_explorer.pdf_download import fetch_latest_dse_report
 from dse_explorer.pdf_extract import extract_equity_prices
 
@@ -24,11 +25,31 @@ log = get_logger()
 
 
 # ------------------------------------------------------------------
+# Step 0: Equity Table (fastest — plain HTML table on homepage)
+# ------------------------------------------------------------------
+def try_equity_table():
+    """Scrape today's data from the #equity table on the DSE homepage."""
+    log.info("--- Step 0: Equity Table ---")
+    try:
+        df = scrape_equity_table()
+        if df is None or df.empty:
+            log.warning("Equity table: no data extracted")
+            return None
+        log.info(f"Equity table: extracted {len(df)} rows")
+        return df
+    except Exception as e:
+        log.exception(f"Equity table failed: {e}")
+        return None
+
+
+# ------------------------------------------------------------------
 # Step 1: Web Scraper
 # ------------------------------------------------------------------
-def try_scraper():
-    """Attempt to scrape today's data from the DSE website."""
-    log.info("--- Step 1: Web Scraper ---")
+SCRAPER_TIMEOUT = 120  # seconds before giving up on the scraper
+
+
+def _run_scraper():
+    """Inner scraper logic (runs inside thread for timeout control)."""
     try:
         soup = get_homepage()
         if not soup:
@@ -55,6 +76,12 @@ def try_scraper():
 
     finally:
         close_browser()
+
+
+def try_scraper():
+    """Attempt to scrape today's data from the DSE website."""
+    log.info("--- Step 1: Web Scraper ---")
+    return _run_scraper()
 
 
 # ------------------------------------------------------------------
@@ -130,22 +157,30 @@ def compare_sources(scraper_df, pdf_df):
     return merged
 
 
-def pick_best(scraper_df, pdf_df):
-    """Choose or merge data from whichever sources succeeded."""
-    both = scraper_df is not None and pdf_df is not None
-    scraper_only = scraper_df is not None and pdf_df is None
-    pdf_only = pdf_df is not None and scraper_df is None
+def pick_best(equity_df, scraper_df, pdf_df):
+    """Choose or merge data from whichever sources succeeded.
+
+    Priority: equity table > PDF > scraper (for compare/merge logic,
+    the equity table is treated like the scraper result when both it
+    and PDF are available).
+    """
+    # If equity table succeeded, use it as the primary web source
+    web_df = equity_df if equity_df is not None else scraper_df
+
+    both = web_df is not None and pdf_df is not None
+    web_only = web_df is not None and pdf_df is None
+    pdf_only = pdf_df is not None and web_df is None
 
     if both:
-        return compare_sources(scraper_df, pdf_df)
+        return compare_sources(web_df, pdf_df)
     elif pdf_only:
-        log.info("Using PDF data (scraper unavailable)")
+        log.info("Using PDF data (web sources unavailable)")
         return pdf_df
-    elif scraper_only:
-        log.info("Using scraper data (PDF unavailable)")
-        return scraper_df
+    elif web_only:
+        log.info("Using web data (PDF unavailable)")
+        return web_df
     else:
-        log.error("Both sources failed — no data to save")
+        log.error("All sources failed — no data to save")
         return None
 
 
@@ -187,20 +222,29 @@ def main():
     errors = []
     source = "none"
 
-    scraper_df = try_scraper()
+    # Step 0 — fastest path: plain HTML table
+    equity_df = try_equity_table()
+
+    # Step 1 — full-page scraper (only if equity table missed)
+    scraper_df = None
+    if equity_df is None:
+        scraper_df = try_scraper()
+
+    # Step 2 — PDF fallback
     pdf_df = try_pdf()
 
-    # Determine which source was used
-    if scraper_df is not None and pdf_df is not None:
-        source = "scraper+PDF"
-    elif scraper_df is not None:
-        source = "scraper"
+    # Determine which source label to report
+    web_df = equity_df or scraper_df
+    if web_df is not None and pdf_df is not None:
+        source = ("equity-table" if equity_df is not None else "scraper") + "+PDF"
+    elif web_df is not None:
+        source = "equity-table" if equity_df is not None else "scraper"
     elif pdf_df is not None:
         source = "PDF"
     else:
-        errors.append("Both scraper and PDF extraction failed")
+        errors.append("All sources (equity table, scraper, PDF) failed")
 
-    result = pick_best(scraper_df, pdf_df)
+    result = pick_best(equity_df, scraper_df, pdf_df)
     if result is None:
         # Notify failure and exit
         try:

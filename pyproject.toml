@@ -24,6 +24,7 @@ include = ["dse_explorer*"]
 
 [project.scripts]
 dse-scrape = "dse_explorer.main:main"
+dse-equity-scrape = "dse_explorer.equity_scraper:main"
 dse-pipeline = "dse_explorer.pipeline:main"
 dse-pdf-download = "dse_explorer.pdf_download:main"
 dse-pdf-extract = "dse_explorer.pdf_extract:main"
