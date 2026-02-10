@@ -1041,16 +1041,9 @@ def main():
 
 
 def cli():
-    """CLI entry point: update data then launch streamlit."""
+    """CLI entry point: launch streamlit dashboard."""
     import sys
     from streamlit.web.cli import main as st_main
-
-    print("Updating market data before launching dashboard...")
-    try:
-        from dse_explorer.pipeline import main as run_pipeline
-        run_pipeline()
-    except Exception as e:
-        print(f"Data update failed ({e}), launching dashboard with existing data.")
 
     sys.argv = ["streamlit", "run", __file__]
     st_main()

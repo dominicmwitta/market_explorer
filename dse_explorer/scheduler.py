@@ -18,20 +18,34 @@ def _find_dse_pipeline() -> str:
     return f'"{sys.executable}" -m dse_explorer.pipeline'
 
 
+def _create_batch_file(work_dir: str, cmd_to_run: str) -> str:
+    """Create a launcher batch file that sets the working directory."""
+    bat_path = os.path.join(work_dir, "run_pipeline.bat")
+    log_path = os.path.join(work_dir, "logs", "task_output.log")
+    lines = [
+        "@echo off",
+        f"cd /d {work_dir}",
+        f"{cmd_to_run} >> \"{log_path}\" 2>&1",
+    ]
+    with open(bat_path, "w") as f:
+        f.write("\r\n".join(lines) + "\r\n")
+    return bat_path
+
+
 def install_schedule(time: str = "18:00",
                      working_dir: str | None = None) -> bool:
     """Create a daily Windows scheduled task."""
     cmd_to_run = _find_dse_pipeline()
     work_dir = working_dir or os.getcwd()
 
-    # Wrap command so it runs from the correct directory
-    wrapped_cmd = f'cmd /c "cd /d {work_dir} && {cmd_to_run}"'
+    # Create a batch file launcher for reliable execution
+    bat_path = _create_batch_file(work_dir, cmd_to_run)
 
     result = subprocess.run(
         [
             "schtasks", "/Create",
             "/TN", TASK_NAME,
-            "/TR", wrapped_cmd,
+            "/TR", bat_path,
             "/SC", "DAILY",
             "/ST", time,
             "/F",  # force overwrite if exists
@@ -42,6 +56,7 @@ def install_schedule(time: str = "18:00",
     if result.returncode == 0:
         print(f"Scheduled task '{TASK_NAME}' created to run daily at {time}")
         print(f"Working directory: {work_dir}")
+        print(f"Launcher: {bat_path}")
         return True
     else:
         print(f"Failed to create scheduled task: {result.stderr.strip()}")
