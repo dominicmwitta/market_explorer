@@ -8,6 +8,24 @@ from dse_explorer.equity_scraper import scrape_equity_table
 from dse_explorer.pdf_extract import extract_equity_prices
 
 OUTPUT_FILE = "dse_equity_daily.csv"
+
+# Canonical names: map old/alternate ticker names to current DSE names.
+# The PDF often lags behind the website when ETFs are renamed.
+_TICKER_ALIASES = {
+    "IEACLC-ETF": "ITRUST ETF",
+    "VERTEX-ETF": "VERTEX ETF",
+}
+
+
+def _normalize_companies(df):
+    """Replace legacy ticker names with current DSE names."""
+    if df is None:
+        return None
+    df = df.copy()
+    df["Company"] = df["Company"].replace(_TICKER_ALIASES)
+    return df
+
+
 COMPARE_COLUMNS = [
     "Opening_Price", "Closing_Price", "High", "Low",
     "Turnover", "Deals", "Outstanding_Bids", "Outstanding_Offers",
@@ -166,6 +184,10 @@ def pick_best(equity_df, scraper_df, pdf_df):
     # If equity table succeeded, use it as the primary web source
     web_df = equity_df if equity_df is not None else scraper_df
 
+    # Normalize ticker names so PDF and web sources match
+    web_df = _normalize_companies(web_df)
+    pdf_df = _normalize_companies(pdf_df)
+
     both = web_df is not None and pdf_df is not None
     web_only = web_df is not None and pdf_df is None
     pdf_only = pdf_df is not None and web_df is None
@@ -192,6 +214,7 @@ def update_master_csv(new_df):
 
     if os.path.exists(OUTPUT_FILE):
         existing = pd.read_csv(OUTPUT_FILE)
+        existing = _normalize_companies(existing)
         log.info(f"Loaded {len(existing)} existing rows from {OUTPUT_FILE}")
         combined = pd.concat([existing, new_df], ignore_index=True)
     else:
