@@ -6,6 +6,13 @@ on:
     - cron: '0 15 * * 1-5'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: dse-pipeline
+  cancel-in-progress: true
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -27,8 +34,8 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
-          printf '{"gmail_address":"%s","app_password":"%s","enabled":true}\n' \
-            "$GMAIL_ADDRESS" "$GMAIL_APP_PASSWORD" > email_config.json
+          jq -n --arg addr "$GMAIL_ADDRESS" --arg pw "$GMAIL_APP_PASSWORD" \
+            '{gmail_address: $addr, app_password: $pw, enabled: true}' > email_config.json
 
       - name: Run pipeline
         run: dse-pipeline
@@ -40,3 +47,13 @@ jobs:
           git add dse_equity_daily.csv
           git diff --cached --quiet || git commit -m "Daily equity data update [skip ci]"
           git push
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs
+          path: |
+            logs/
+            reports/
+          retention-days: 7
