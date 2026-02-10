@@ -3,15 +3,8 @@
 import os
 import pandas as pd
 
-from dse_explorer import (
-    get_homepage,
-    find_daily_report_urls,
-)
-from dse_explorer.scraper import close_browser
 from dse_explorer.logger import get_logger
-from dse_explorer.scrape import scrape_report
 from dse_explorer.equity_scraper import scrape_equity_table
-from dse_explorer.pdf_download import fetch_latest_dse_report
 from dse_explorer.pdf_extract import extract_equity_prices
 
 OUTPUT_FILE = "dse_equity_daily.csv"
@@ -50,6 +43,10 @@ SCRAPER_TIMEOUT = 120  # seconds before giving up on the scraper
 
 def _run_scraper():
     """Inner scraper logic (runs inside thread for timeout control)."""
+    from dse_explorer import get_homepage, find_daily_report_urls
+    from dse_explorer.scraper import close_browser
+    from dse_explorer.scrape import scrape_report
+
     try:
         soup = get_homepage()
         if not soup:
@@ -91,6 +88,8 @@ def try_pdf():
     """Download and extract today's PDF report."""
     log.info("--- Step 2: PDF Extraction ---")
     try:
+        from dse_explorer.pdf_download import fetch_latest_dse_report
+
         success = fetch_latest_dse_report()
         if not success:
             log.warning("PDF: download failed")
@@ -234,7 +233,7 @@ def main():
     pdf_df = try_pdf()
 
     # Determine which source label to report
-    web_df = equity_df or scraper_df
+    web_df = equity_df if equity_df is not None else scraper_df
     if web_df is not None and pdf_df is not None:
         source = ("equity-table" if equity_df is not None else "scraper") + "+PDF"
     elif web_df is not None:
