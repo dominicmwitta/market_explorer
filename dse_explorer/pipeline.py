@@ -229,6 +229,10 @@ def main():
     if equity_df is None:
         scraper_df = try_scraper()
 
+    # Close Playwright from prior steps so pdf_download can start its own
+    from dse_explorer.scraper import close_browser
+    close_browser()
+
     # Step 2 — PDF fallback
     pdf_df = try_pdf()
 
