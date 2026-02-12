@@ -13,7 +13,29 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 
+import requests
+
 from dse_explorer.config import SECTOR_MAP, get_sector
+
+GITHUB_CSV_URL = (
+    "https://raw.githubusercontent.com/dominicmwitta/market_explorer"
+    "/main/dse_equity_daily.csv"
+)
+LOCAL_CSV = "dse_equity_daily.csv"
+
+
+def sync_from_github() -> bool:
+    """Download the latest CSV from GitHub and save locally.
+
+    Returns True on success, False on failure.
+    """
+    try:
+        resp = requests.get(GITHUB_CSV_URL, timeout=30)
+        resp.raise_for_status()
+        Path(LOCAL_CSV).write_bytes(resp.content)
+        return True
+    except Exception:
+        return False
 
 
 # Page config
@@ -92,12 +114,25 @@ def main():
     # Title
     st.title("\U0001F4CA DSE Stock Analytics Dashboard")
 
+    # Auto-sync from GitHub on first load
+    if "data_synced" not in st.session_state:
+        with st.spinner("Downloading latest data from GitHub..."):
+            if sync_from_github():
+                st.session_state["data_synced"] = True
+                st.session_state["sync_status"] = "Synced from GitHub"
+            else:
+                st.session_state["data_synced"] = True  # don't retry every rerun
+                st.session_state["sync_status"] = "Sync failed — using local data"
+
     # Load data
     try:
         df = load_data()
         metrics = calculate_metrics(df)
     except FileNotFoundError:
-        st.error("Data file not found. Please run the scraper first.")
+        st.error(
+            "Data file not found. Check your internet connection and "
+            "click **Refresh data from GitHub** in the sidebar."
+        )
         return
 
     # Date range info
@@ -115,6 +150,23 @@ def main():
             )
     except Exception:
         pass
+
+    # Sidebar: data sync controls
+    st.sidebar.header("\U0001F4E1 Data Source")
+    st.sidebar.caption(st.session_state.get("sync_status", ""))
+    if st.sidebar.button("Refresh data from GitHub"):
+        with st.spinner("Downloading..."):
+            if sync_from_github():
+                st.session_state["sync_status"] = (
+                    f"Synced {datetime.now().strftime('%H:%M:%S')}"
+                )
+                load_data.clear()
+                calculate_metrics.clear()
+                st.rerun()
+            else:
+                st.sidebar.error("Download failed. Check connection.")
+
+    st.sidebar.markdown("---")
 
     # Sidebar filters
     st.sidebar.header("\U0001F527 Filters")
