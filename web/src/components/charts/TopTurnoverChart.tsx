@@ -5,7 +5,13 @@ import { formatCompactTZS } from "@/lib/format";
 
 type Datum = { company: string; totalTurnover: number; totalReturnPct: number };
 
-export default function TopTurnoverChart({ data }: { data: Datum[] }) {
+export default function TopTurnoverChart({
+  data,
+  fullNameByTicker,
+}: {
+  data: Datum[];
+  fullNameByTicker?: Record<string, string>;
+}) {
   return (
     <ResponsiveContainer width="100%" height={400}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -35,6 +41,7 @@ export default function TopTurnoverChart({ data }: { data: Datum[] }) {
             borderRadius: 8,
             fontSize: 12,
           }}
+          labelFormatter={(label) => (typeof label === "string" ? fullNameByTicker?.[label] ?? label : label)}
           formatter={(value) => [
             typeof value === "number" ? formatCompactTZS(value) : "—",
             "Turnover",

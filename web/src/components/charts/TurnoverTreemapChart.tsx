@@ -3,7 +3,7 @@
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import { formatCompactTZS } from "@/lib/format";
 
-type LeafDatum = { name: string; size: number; returnPct: number };
+type LeafDatum = { name: string; fullName?: string; size: number; returnPct: number };
 
 interface CellProps {
   x?: number;
@@ -58,6 +58,7 @@ function TreemapTooltip({
       }}
     >
       <div className="font-medium">{d.name}</div>
+      {d.fullName && d.fullName !== d.name && <div className="text-text-muted">{d.fullName}</div>}
       <div>Turnover: {formatCompactTZS(d.value)}</div>
       <div>Return: {d.returnPct.toFixed(2)}%</div>
     </div>

@@ -1,17 +1,13 @@
-import { getDailyTotalTurnover, getMarketMetrics } from "@/lib/db";
-import TopTurnoverChart from "@/components/charts/TopTurnoverChart";
-import TurnoverTreemapChart from "@/components/charts/TurnoverTreemapChart";
-import DailyTurnoverAreaChart from "@/components/charts/DailyTurnoverAreaChart";
+import { getDailyTurnoverByCompany, getMarketMetrics } from "@/lib/db";
+import VolumeClient from "./VolumeClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function VolumePage() {
-  const [metrics, dailyTurnover] = await Promise.all([getMarketMetrics(), getDailyTotalTurnover()]);
-
-  const top15 = [...metrics].sort((a, b) => b.totalTurnover - a.totalTurnover).slice(0, 15);
-  const treemapData = metrics
-    .filter((m) => m.totalTurnover > 0)
-    .map((m) => ({ name: m.company, size: m.totalTurnover, returnPct: m.totalReturnPct }));
+  const [metrics, dailyTurnoverByCompany] = await Promise.all([
+    getMarketMetrics(),
+    getDailyTurnoverByCompany(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -23,20 +19,7 @@ export default async function VolumePage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <h2 className="mb-3 text-lg font-semibold">Trading Volume by Stock</h2>
-        <TopTurnoverChart data={top15} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <h2 className="mb-3 text-lg font-semibold">Market Share by Turnover</h2>
-        <TurnoverTreemapChart data={treemapData} />
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <h2 className="mb-3 text-lg font-semibold">Daily Turnover Trend</h2>
-        <DailyTurnoverAreaChart data={dailyTurnover} />
-      </div>
+      <VolumeClient metrics={metrics} dailyTurnoverByCompany={dailyTurnoverByCompany} />
     </div>
   );
 }

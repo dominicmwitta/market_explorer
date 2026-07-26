@@ -9,6 +9,7 @@ const sql = neon(process.env.DATABASE_URL);
 
 export type CompanyMetrics = {
   company: string;
+  fullName: string;
   sector: string;
   currentPrice: number;
   startPrice: number;
@@ -67,6 +68,7 @@ export async function getMarketMetrics(): Promise<CompanyMetrics[]> {
     SELECT
       dp.company,
       c.sector,
+      COALESCE(c.full_name, dp.company) AS full_name,
       dp.date::text AS date,
       dp.closing_price::float8 AS closing_price,
       dp.turnover::float8 AS turnover
@@ -78,12 +80,13 @@ export async function getMarketMetrics(): Promise<CompanyMetrics[]> {
 
   const byCompany = new Map<
     string,
-    { sector: string; closingPrices: number[]; turnovers: number[] }
+    { sector: string; fullName: string; closingPrices: number[]; turnovers: number[] }
   >();
   for (const r of rows) {
     const company = r.company as string;
     const entry = byCompany.get(company) ?? {
       sector: r.sector as string,
+      fullName: r.full_name as string,
       closingPrices: [],
       turnovers: [],
     };
@@ -93,7 +96,7 @@ export async function getMarketMetrics(): Promise<CompanyMetrics[]> {
   }
 
   const metrics: CompanyMetrics[] = [];
-  for (const [company, { sector, closingPrices, turnovers }] of byCompany) {
+  for (const [company, { sector, fullName, closingPrices, turnovers }] of byCompany) {
     if (closingPrices.length === 0) continue;
 
     const startPrice = closingPrices[0];
@@ -117,6 +120,7 @@ export async function getMarketMetrics(): Promise<CompanyMetrics[]> {
 
     metrics.push({
       company,
+      fullName,
       sector,
       currentPrice,
       startPrice,
@@ -316,12 +320,17 @@ export async function getAllClosingPrices(): Promise<Record<string, ClosingPrice
   return result;
 }
 
-/** All active tickers with their sector, for nav/lookup. */
-export async function getTickers(): Promise<{ ticker: string; sector: string }[]> {
+/** All active tickers with their sector and full name, for nav/lookup. */
+export async function getTickers(): Promise<{ ticker: string; sector: string; fullName: string }[]> {
   const rows = await sql`
-    SELECT ticker, sector FROM companies WHERE active ORDER BY ticker
+    SELECT ticker, sector, COALESCE(full_name, ticker) AS full_name
+    FROM companies WHERE active ORDER BY ticker
   `;
-  return rows.map((r) => ({ ticker: r.ticker as string, sector: r.sector as string }));
+  return rows.map((r) => ({
+    ticker: r.ticker as string,
+    sector: r.sector as string,
+    fullName: r.full_name as string,
+  }));
 }
 
 export type DailyTurnoverPoint = { date: string; totalTurnover: number };
@@ -337,6 +346,32 @@ export async function getDailyTotalTurnover(): Promise<DailyTurnoverPoint[]> {
     ORDER BY dp.date ASC
   `;
   return rows.map((r) => ({ date: r.date as string, totalTurnover: Number(r.total_turnover) }));
+}
+
+export type CompanyDailyTurnoverPoint = { date: string; turnover: number };
+
+/**
+ * Daily turnover per active company, oldest to newest — lets client-side
+ * stock filters re-aggregate the "Daily Turnover Trend" chart to a subset of
+ * stocks, unlike getDailyTotalTurnover()'s pre-summed market-wide total.
+ */
+export async function getDailyTurnoverByCompany(): Promise<
+  Record<string, CompanyDailyTurnoverPoint[]>
+> {
+  const rows = await sql`
+    SELECT dp.company, dp.date::text AS date, dp.turnover::float8 AS turnover
+    FROM daily_prices dp
+    JOIN companies c ON c.ticker = dp.company
+    WHERE c.active
+    ORDER BY dp.company, dp.date ASC
+  `;
+
+  const result: Record<string, CompanyDailyTurnoverPoint[]> = {};
+  for (const r of rows) {
+    const company = r.company as string;
+    (result[company] ??= []).push({ date: r.date as string, turnover: Number(r.turnover) });
+  }
+  return result;
 }
 
 export type VolumeSpike = {
@@ -463,4 +498,33 @@ export async function getBidOfferRatioForTopLiquid(limit = 10): Promise<LiquidBi
             : 0,
     })),
   }));
+}
+
+export type CompanyPressurePoint = { company: string; date: string; pressure: string };
+
+/**
+ * Per-company daily pressure classification (same classifyPressure() rules as
+ * getPressureTrend(), just not pre-aggregated by date) — lets callers bucket
+ * an arbitrary filtered subset of companies into daily counts themselves,
+ * which the market-wide getPressureTrend() aggregate can't support.
+ */
+export async function getPressureByCompany(): Promise<CompanyPressurePoint[]> {
+  const rows = await sql`
+    SELECT
+      dp.company,
+      dp.date::text AS date,
+      dp.outstanding_bids::float8 AS outstanding_bids,
+      dp.outstanding_offers::float8 AS outstanding_offers
+    FROM daily_prices dp
+    JOIN companies c ON c.ticker = dp.company
+    WHERE c.active
+    ORDER BY dp.date ASC
+  `;
+
+  return rows.map((r) => {
+    const bids = Number(r.outstanding_bids);
+    const offers = Number(r.outstanding_offers);
+    const { pressure } = classifyPressure(bids, offers);
+    return { company: r.company as string, date: r.date as string, pressure };
+  });
 }

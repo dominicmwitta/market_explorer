@@ -7,9 +7,11 @@ type RankingDatum = { company: string; totalReturnPct: number };
 export default function ReturnRankingChart({
   data,
   barColor,
+  fullNameByTicker,
 }: {
   data: RankingDatum[];
   barColor: string;
+  fullNameByTicker?: Record<string, string>;
 }) {
   return (
     <ResponsiveContainer width="100%" height={400}>
@@ -37,6 +39,7 @@ export default function ReturnRankingChart({
             borderRadius: 8,
             fontSize: 12,
           }}
+          labelFormatter={(label) => (typeof label === "string" ? fullNameByTicker?.[label] ?? label : label)}
           formatter={(value) => [
             typeof value === "number" ? `${value.toFixed(2)}%` : "—",
             "Return",

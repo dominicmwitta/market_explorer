@@ -14,6 +14,7 @@ import {
 } from "recharts";
 type Datum = {
   company: string;
+  fullName?: string;
   volatilityPct: number;
   totalReturnPct: number;
   totalTurnover: number;
@@ -39,6 +40,9 @@ function ScatterTooltip({
       }}
     >
       <div className="font-medium">{d.company}</div>
+      {d.fullName && d.fullName !== d.company && (
+        <div className="text-text-muted">{d.fullName}</div>
+      )}
       <div>Return: {d.totalReturnPct.toFixed(2)}%</div>
       <div>Volatility: {d.volatilityPct.toFixed(2)}%</div>
     </div>

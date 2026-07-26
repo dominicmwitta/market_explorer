@@ -4,7 +4,13 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 
 
 type SharpeDatum = { company: string; sharpeRatio: number; totalReturnPct: number };
 
-export default function SharpeRatioChart({ data }: { data: SharpeDatum[] }) {
+export default function SharpeRatioChart({
+  data,
+  fullNameByTicker,
+}: {
+  data: SharpeDatum[];
+  fullNameByTicker?: Record<string, string>;
+}) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
@@ -32,6 +38,7 @@ export default function SharpeRatioChart({ data }: { data: SharpeDatum[] }) {
             borderRadius: 8,
             fontSize: 12,
           }}
+          labelFormatter={(label) => (typeof label === "string" ? fullNameByTicker?.[label] ?? label : label)}
           formatter={(value) => [
             typeof value === "number" ? value.toFixed(3) : "—",
             "Sharpe ratio",

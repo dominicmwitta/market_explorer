@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/order-book", label: "Order Book" },
   { href: "/order-book/trends", label: "OB Trends" },
   { href: "/backtest", label: "Backtest" },
+  { href: "/liquidity-index", label: "Liquidity Index" },
 ];
 
 export default function Nav() {
