@@ -1,0 +1,21 @@
+export function formatTZS(value: number): string {
+  return `TZS ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)}`;
+}
+
+export function formatCompactTZS(value: number): string {
+  return `TZS ${new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value)}`;
+}
+
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+export function formatPct(value: number, digits = 2): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(digits)}%`;
+}
+
+export function formatRatio(value: number | null): string {
+  if (value === null) return "∞"; // infinity — bids present, zero offers
+  return value.toFixed(2);
+}
