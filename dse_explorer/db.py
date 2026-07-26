@@ -15,7 +15,7 @@ from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from dse_explorer.config import SECTOR_MAP, EXCLUDED_TICKERS, get_sector
+from dse_explorer.config import SECTOR_MAP, EXCLUDED_TICKERS, get_sector, get_full_name
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -80,10 +80,10 @@ def upsert_companies(engine: Engine, tickers: set[str], sync_known: bool = False
     database isn't silently overwritten by the next scrape.
     """
     known = {t for tickers_ in SECTOR_MAP.values() for t in tickers_}
-    rows = [(t, get_sector(t), t not in EXCLUDED_TICKERS) for t in tickers]
+    rows = [(t, get_sector(t), t not in EXCLUDED_TICKERS, get_full_name(t)) for t in tickers]
 
     conflict_clause = (
-        "DO UPDATE SET sector = EXCLUDED.sector, active = EXCLUDED.active"
+        "DO UPDATE SET sector = EXCLUDED.sector, active = EXCLUDED.active, full_name = EXCLUDED.full_name"
         if sync_known else "DO NOTHING"
     )
 
@@ -94,7 +94,7 @@ def upsert_companies(engine: Engine, tickers: set[str], sync_known: bool = False
                 execute_values(
                     cur,
                     f"""
-                    INSERT INTO companies (ticker, sector, active)
+                    INSERT INTO companies (ticker, sector, active, full_name)
                     VALUES %s
                     ON CONFLICT (ticker) {conflict_clause}
                     """,
@@ -107,7 +107,7 @@ def upsert_companies(engine: Engine, tickers: set[str], sync_known: bool = False
                     execute_values(
                         cur,
                         f"""
-                        INSERT INTO companies (ticker, sector, active)
+                        INSERT INTO companies (ticker, sector, active, full_name)
                         VALUES %s
                         ON CONFLICT (ticker) {conflict_clause}
                         """,
