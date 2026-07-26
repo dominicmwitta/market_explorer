@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { dailyReturnsPct, sampleStdDev } from "@/lib/metrics";
+import { computeCompanyStats } from "@/lib/metrics";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set. Add it to web/.env.local");
@@ -98,39 +98,11 @@ export async function getMarketMetrics(): Promise<CompanyMetrics[]> {
   const metrics: CompanyMetrics[] = [];
   for (const [company, { sector, fullName, closingPrices, turnovers }] of byCompany) {
     if (closingPrices.length === 0) continue;
-
-    const startPrice = closingPrices[0];
-    const currentPrice = closingPrices[closingPrices.length - 1];
-    const totalReturnPct =
-      startPrice > 0 ? ((currentPrice - startPrice) / startPrice) * 100 : 0;
-
-    const dailyReturns = dailyReturnsPct(closingPrices);
-    const volatilityPct = sampleStdDev(dailyReturns);
-    const avgDailyReturnPct =
-      dailyReturns.length > 0
-        ? dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-        : 0;
-    const sharpeRatio = volatilityPct > 0 ? avgDailyReturnPct / volatilityPct : 0;
-    const latestReturnPct = dailyReturns.length > 0 ? dailyReturns[dailyReturns.length - 1] : 0;
-
-    const totalTurnover = turnovers.reduce((a, b) => a + b, 0);
-    const tradingDays = turnovers.filter((t) => t > 0).length;
-    const liquidityPct = (tradingDays / closingPrices.length) * 100;
-    const avgClosingPrice = closingPrices.reduce((a, b) => a + b, 0) / closingPrices.length;
-
     metrics.push({
       company,
       fullName,
       sector,
-      currentPrice,
-      startPrice,
-      totalReturnPct,
-      totalTurnover,
-      volatilityPct,
-      sharpeRatio,
-      latestReturnPct,
-      liquidityPct,
-      avgClosingPrice,
+      ...computeCompanyStats(closingPrices, turnovers),
     });
   }
 

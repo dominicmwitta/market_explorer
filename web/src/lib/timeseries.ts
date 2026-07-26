@@ -7,6 +7,13 @@
 
 export type SeriesPoint<V = number> = { date: string; value: V };
 
+export type DateRange = { start: string; end: string }; // inclusive, "YYYY-MM-DD"
+
+/** Inclusive date-string comparison — works directly since ISO dates sort lexicographically. */
+export function inDateRange(date: string, range: DateRange): boolean {
+  return date >= range.start && date <= range.end;
+}
+
 /** One row per date, one column per ticker — the shape Recharts needs for multi-line charts. */
 export function pivotByDate<V extends number | string | null>(
   seriesByTicker: Record<string, SeriesPoint<V>[]>,
