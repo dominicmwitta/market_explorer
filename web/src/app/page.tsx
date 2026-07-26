@@ -20,16 +20,24 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-10">
+      <section
+        className="-mt-8 rounded-b-2xl px-6 py-8 sm:-mt-8 sm:px-8"
+        style={{ background: "var(--brand-gradient)", marginLeft: "-1.5rem", marginRight: "-1.5rem" }}
+      >
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-white">Market Summary</h1>
+          <p className="mt-1 text-sm text-white/80">
+            Across {metrics.length} active DSE-listed stocks, full available history.
+          </p>
+        </div>
+      </section>
+
       <section>
-        <h1 className="text-2xl font-semibold tracking-tight">Market Summary</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Across {metrics.length} active DSE-listed stocks, full available history.
-        </p>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatTile label="Total Stocks" value={String(metrics.length)} />
-          <StatTile label="Gainers" value={String(gainers)} sub={`${unchanged} unchanged`} />
-          <StatTile label="Losers" value={String(losers)} />
-          <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} />
+          <StatTile label="Total Stocks" value={String(metrics.length)} accent={1} />
+          <StatTile label="Gainers" value={String(gainers)} sub={`${unchanged} unchanged`} accent="good" />
+          <StatTile label="Losers" value={String(losers)} accent="critical" />
+          <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} accent={7} />
         </div>
       </section>
 
@@ -39,13 +47,14 @@ export default async function HomePage() {
           How today compares to the full period — advance/decline sentiment and price-vs-average positioning.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatTile label="Advancing" value={String(breadth.gainers)} />
-          <StatTile label="Declining" value={String(breadth.losers)} />
+          <StatTile label="Advancing" value={String(breadth.gainers)} accent="good" />
+          <StatTile label="Declining" value={String(breadth.losers)} accent="critical" />
           <StatTile
             label="A/D Ratio"
             value={breadth.advanceDeclineRatio === null ? "∞" : breadth.advanceDeclineRatio.toFixed(2)}
+            accent={4}
           />
-          <StatTile label="Above Avg Price" value={`${breadth.pctAboveAvgPrice.toFixed(1)}%`} />
+          <StatTile label="Above Avg Price" value={`${breadth.pctAboveAvgPrice.toFixed(1)}%`} accent={3} />
         </div>
       </section>
 

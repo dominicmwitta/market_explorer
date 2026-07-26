@@ -25,6 +25,9 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
+
+  --brand-gradient: linear-gradient(135deg, #2a78d6 0%, #4a3aa7 55%, #e34948 100%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(42, 120, 214, 0.12), rgba(74, 58, 167, 0.12));
 }
 
 @media (prefers-color-scheme: dark) {

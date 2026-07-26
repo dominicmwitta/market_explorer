@@ -21,12 +21,12 @@ export default function Nav() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-border bg-surface">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-2 px-6 py-4">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-text-primary">
-          DSE Market Explorer
+    <header style={{ background: "var(--brand-gradient)" }}>
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-3 px-6 py-4">
+        <Link href="/" className="text-lg font-semibold tracking-tight text-white">
+          📈 DSE Market Explorer
         </Link>
-        <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <nav className="flex flex-wrap gap-x-1.5 gap-y-2 text-sm">
           {LINKS.map((link) => {
             const active =
               link.href === "/"
@@ -40,8 +40,8 @@ export default function Nav() {
                 href={link.href}
                 className={
                   active
-                    ? "font-medium text-text-primary"
-                    : "text-text-secondary hover:text-text-primary"
+                    ? "rounded-full bg-white px-3 py-1 font-medium text-[#2a1a5e]"
+                    : "rounded-full px-3 py-1 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
                 }
               >
                 {link.label}

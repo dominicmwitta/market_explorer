@@ -83,9 +83,10 @@ export default function PriceTrendsClient({
                 onClick={() => toggle(ticker)}
                 disabled={disabled}
                 aria-pressed={active}
+                style={active ? { background: "var(--brand-gradient)" } : undefined}
                 className={
                   active
-                    ? "rounded-full border border-transparent bg-text-primary px-3 py-1 text-xs font-medium text-surface"
+                    ? "rounded-full border border-transparent px-3 py-1 text-xs font-medium text-white"
                     : disabled
                       ? "rounded-full border border-border px-3 py-1 text-xs font-medium text-text-muted opacity-50"
                       : "rounded-full border border-border px-3 py-1 text-xs font-medium text-text-secondary hover:text-text-primary"

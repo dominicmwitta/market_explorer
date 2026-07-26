@@ -41,10 +41,10 @@ export default async function StockDetailPage(props: PageProps<"/stocks/[ticker]
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatTile label="Current Price" value={formatTZS(currentPrice)} />
-        <StatTile label="Total Return" value={<ReturnValue value={totalReturnPct} />} />
-        <StatTile label="Volatility" value={`${volatility.toFixed(2)}%`} />
-        <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} />
+        <StatTile label="Current Price" value={formatTZS(currentPrice)} accent={1} />
+        <StatTile label="Total Return" value={<ReturnValue value={totalReturnPct} />} accent={totalReturnPct >= 0 ? "good" : "critical"} />
+        <StatTile label="Volatility" value={`${volatility.toFixed(2)}%`} accent={4} />
+        <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} accent={7} />
       </div>
 
       <section>

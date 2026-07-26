@@ -52,7 +52,8 @@ export default function BacktestClient() {
             type="button"
             onClick={handleRun}
             disabled={isPending}
-            className="rounded-md bg-series-1 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            style={{ background: "var(--brand-gradient)" }}
+            className="rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
           >
             {isPending ? "Running backtest…" : "Run Backtest"}
           </button>
