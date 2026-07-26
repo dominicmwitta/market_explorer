@@ -2,25 +2,46 @@
 
 import { useMemo, useState } from "react";
 import StockFilterBar from "@/components/StockFilterBar";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 import ReturnHistogramChart from "@/components/charts/ReturnHistogramChart";
 import ReturnVolatilityScatterChart from "@/components/charts/ReturnVolatilityScatterChart";
 import MomentumChart from "@/components/charts/MomentumChart";
-import type { CompanyMetrics } from "@/lib/db";
+import { computeMetricsForRange } from "@/lib/metrics";
+import type { DateRange } from "@/lib/timeseries";
+import type { PricePoint } from "@/lib/db";
 
 const BIN_COUNT = 20;
 
-export default function ReturnsClient({ metrics }: { metrics: CompanyMetrics[] }) {
+type TickerMeta = { ticker: string; sector: string; fullName: string };
+
+export default function ReturnsClient({
+  tickers,
+  history,
+}: {
+  tickers: TickerMeta[];
+  history: Record<string, PricePoint[]>;
+}) {
+  const allDates = Object.values(history).flatMap((points) => points.map((p) => p.date));
+  const minDate = allDates.length > 0 ? allDates.reduce((a, b) => (b < a ? b : a)) : "";
+  const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => (b > a ? b : a)) : "";
+
+  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(metrics.map((m) => m.company))
+    () => new Set(tickers.map((t) => t.ticker))
+  );
+
+  const metrics = useMemo(
+    () => computeMetricsForRange(tickers, history, range),
+    [tickers, history, range]
   );
 
   const options = useMemo(
-    () => metrics.map((m) => ({ ticker: m.company, sector: m.sector })),
-    [metrics]
+    () => tickers.map((t) => ({ ticker: t.ticker, sector: t.sector })),
+    [tickers]
   );
   const fullNameByTicker = useMemo(
-    () => Object.fromEntries(metrics.map((m) => [m.company, m.fullName])),
-    [metrics]
+    () => Object.fromEntries(tickers.map((t) => [t.ticker, t.fullName])),
+    [tickers]
   );
 
   const filtered = useMemo(
@@ -85,9 +106,13 @@ export default function ReturnsClient({ metrics }: { metrics: CompanyMetrics[] }
           options={options}
           selected={selected}
           onToggle={toggle}
-          onSelectAll={() => setSelected(new Set(metrics.map((m) => m.company)))}
+          onSelectAll={() => setSelected(new Set(tickers.map((t) => t.ticker)))}
           onClearAll={() => setSelected(new Set())}
         />
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
 
       {filtered.length === 0 ? (

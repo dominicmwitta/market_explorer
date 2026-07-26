@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import { getPriceHistory, getTickers } from "@/lib/db";
 import { sma, rsi, macd, bollingerBands } from "@/lib/indicators";
-import RsiChart from "@/components/charts/RsiChart";
-import MacdChart from "@/components/charts/MacdChart";
-import PriceWithBollinger, { type TechCandle } from "./PriceWithBollinger";
+import TechnicalClient from "./TechnicalClient";
+import type { TechCandle } from "./PriceWithBollinger";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +24,9 @@ export default async function TechnicalPage(props: PageProps<"/technical/[ticker
     );
   }
 
+  // Rolling-window indicators (SMA-50 needs 49 prior days, etc.) must be computed
+  // over the FULL history here, before any period filtering — TechnicalClient only
+  // slices this already-computed combined series for display.
   const closingPrices = history.map((h) => h.closingPrice);
   const sma20 = sma(closingPrices, 20);
   const sma50 = sma(closingPrices, 50);
@@ -56,27 +58,6 @@ export default async function TechnicalPage(props: PageProps<"/technical/[ticker
   }));
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">{ticker}</h1>
-
-      <PriceWithBollinger ticker={ticker} data={priceData} />
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">RSI</h2>
-        <p className="mb-3 text-sm text-text-secondary">
-          Dashed lines mark the conventional overbought (70) and oversold (30) thresholds.
-        </p>
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <RsiChart data={rsiData} />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">MACD</h2>
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <MacdChart data={macdSeries} />
-        </div>
-      </section>
-    </div>
+    <TechnicalClient ticker={ticker} priceData={priceData} rsiData={rsiData} macdSeries={macdSeries} />
   );
 }

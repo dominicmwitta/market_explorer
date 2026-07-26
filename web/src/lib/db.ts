@@ -320,32 +320,6 @@ export async function getDailyTotalTurnover(): Promise<DailyTurnoverPoint[]> {
   return rows.map((r) => ({ date: r.date as string, totalTurnover: Number(r.total_turnover) }));
 }
 
-export type CompanyDailyTurnoverPoint = { date: string; turnover: number };
-
-/**
- * Daily turnover per active company, oldest to newest — lets client-side
- * stock filters re-aggregate the "Daily Turnover Trend" chart to a subset of
- * stocks, unlike getDailyTotalTurnover()'s pre-summed market-wide total.
- */
-export async function getDailyTurnoverByCompany(): Promise<
-  Record<string, CompanyDailyTurnoverPoint[]>
-> {
-  const rows = await sql`
-    SELECT dp.company, dp.date::text AS date, dp.turnover::float8 AS turnover
-    FROM daily_prices dp
-    JOIN companies c ON c.ticker = dp.company
-    WHERE c.active
-    ORDER BY dp.company, dp.date ASC
-  `;
-
-  const result: Record<string, CompanyDailyTurnoverPoint[]> = {};
-  for (const r of rows) {
-    const company = r.company as string;
-    (result[company] ??= []).push({ date: r.date as string, turnover: Number(r.turnover) });
-  }
-  return result;
-}
-
 export type VolumeSpike = {
   company: string;
   latestVolume: number;

@@ -2,21 +2,46 @@
 
 import { useMemo, useState } from "react";
 import { formatCompactTZS } from "@/lib/format";
+import { computeCompanyStats } from "@/lib/metrics";
+import { inDateRange, type DateRange } from "@/lib/timeseries";
 import ReturnValue from "@/components/ReturnValue";
 import SectorReturnChart from "@/components/charts/SectorReturnChart";
 import SectorTurnoverTreemapChart, {
   type SectorTreemapDatum,
 } from "@/components/charts/SectorTurnoverTreemapChart";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 import StockFilterBar from "@/components/StockFilterBar";
-import type { CompanyMetrics } from "@/lib/db";
+import type { PricePoint } from "@/lib/db";
 
-export default function SectorsClient({ metrics }: { metrics: CompanyMetrics[] }) {
-  const allTickers = useMemo(() => metrics.map((m) => m.company), [metrics]);
+type TickerInfo = { ticker: string; sector: string; fullName: string };
+
+export default function SectorsClient({
+  tickers,
+  history,
+}: {
+  tickers: TickerInfo[];
+  history: Record<string, PricePoint[]>;
+}) {
+  const allTickers = useMemo(() => tickers.map((t) => t.ticker), [tickers]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(allTickers));
 
+  const { minDate, maxDate } = useMemo(() => {
+    let min = "";
+    let max = "";
+    for (const ticker of allTickers) {
+      const points = history[ticker] ?? [];
+      if (points.length === 0) continue;
+      if (!min || points[0].date < min) min = points[0].date;
+      const last = points[points.length - 1].date;
+      if (!max || last > max) max = last;
+    }
+    return { minDate: min, maxDate: max };
+  }, [allTickers, history]);
+  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
+
   const filterOptions = useMemo(
-    () => metrics.map((m) => ({ ticker: m.company, sector: m.sector })),
-    [metrics]
+    () => tickers.map((t) => ({ ticker: t.ticker, sector: t.sector })),
+    [tickers]
   );
 
   function toggle(ticker: string) {
@@ -27,6 +52,20 @@ export default function SectorsClient({ metrics }: { metrics: CompanyMetrics[] }
       return next;
     });
   }
+
+  // Per-company stats recomputed over the date-filtered slice, mirroring
+  // getMarketMetrics()'s full-history computation (same computeCompanyStats).
+  const metrics = useMemo(() => {
+    return tickers
+      .map((t) => {
+        const points = (history[t.ticker] ?? []).filter((h) => inDateRange(h.date, range));
+        if (points.length === 0) return null;
+        const closingPrices = points.map((p) => p.closingPrice);
+        const turnovers = points.map((p) => p.turnover);
+        return { company: t.ticker, sector: t.sector, ...computeCompanyStats(closingPrices, turnovers) };
+      })
+      .filter((m): m is NonNullable<typeof m> => m !== null);
+  }, [tickers, history, range]);
 
   const filtered = useMemo(() => metrics.filter((m) => selected.has(m.company)), [metrics, selected]);
 
@@ -62,6 +101,10 @@ export default function SectorsClient({ metrics }: { metrics: CompanyMetrics[] }
 
   return (
     <>
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+      </div>
+
       <StockFilterBar
         options={filterOptions}
         selected={selected}
@@ -88,7 +131,7 @@ export default function SectorsClient({ metrics }: { metrics: CompanyMetrics[] }
             {sectors.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-text-secondary">
-                  No stocks selected.
+                  No stocks with trading data in the selected period.
                 </td>
               </tr>
             ) : (

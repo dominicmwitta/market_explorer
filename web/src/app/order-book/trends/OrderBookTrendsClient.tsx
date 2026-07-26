@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { pivotByDate, type SeriesPoint } from "@/lib/timeseries";
+import { inDateRange, pivotByDate, type DateRange, type SeriesPoint } from "@/lib/timeseries";
 import PressureTrendChart from "@/components/charts/PressureTrendChart";
 import MultiLineChart from "@/components/charts/MultiLineChart";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 import StockFilterBar from "@/components/StockFilterBar";
 import type { CompanyPressurePoint, LiquidBidOfferSeries } from "@/lib/db";
 
@@ -19,6 +20,17 @@ export default function OrderBookTrendsClient({
   const allTickers = useMemo(() => tickers.map((t) => t.ticker), [tickers]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(allTickers));
 
+  const { minDate, maxDate } = useMemo(() => {
+    let min = "";
+    let max = "";
+    for (const p of pressureByCompany) {
+      if (!min || p.date < min) min = p.date;
+      if (!max || p.date > max) max = p.date;
+    }
+    return { minDate: min, maxDate: max };
+  }, [pressureByCompany]);
+  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
+
   function toggle(ticker: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -33,7 +45,7 @@ export default function OrderBookTrendsClient({
   const pressureTrend = useMemo(() => {
     const byDate = new Map<string, { strongBuy: number; neutral: number; sellPressure: number }>();
     for (const p of pressureByCompany) {
-      if (!selected.has(p.company)) continue;
+      if (!selected.has(p.company) || !inDateRange(p.date, range)) continue;
       const entry = byDate.get(p.date) ?? { strongBuy: 0, neutral: 0, sellPressure: 0 };
       if (p.pressure.startsWith("Strong Buy Pressure")) entry.strongBuy += 1;
       else if (p.pressure === "Sell Pressure") entry.sellPressure += 1;
@@ -43,7 +55,7 @@ export default function OrderBookTrendsClient({
     return [...byDate.entries()]
       .map(([date, counts]) => ({ date, ...counts }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [pressureByCompany, selected]);
+  }, [pressureByCompany, selected, range]);
 
   const filteredLiquid = useMemo(
     () => liquidRatios.filter((r) => selected.has(r.ticker)),
@@ -53,13 +65,19 @@ export default function OrderBookTrendsClient({
   const ratioChartData = useMemo(() => {
     const seriesByTicker: Record<string, SeriesPoint<number | null>[]> = {};
     for (const r of filteredLiquid) {
-      seriesByTicker[r.ticker] = r.points.map((p) => ({ date: p.date, value: p.ratio }));
+      seriesByTicker[r.ticker] = r.points
+        .filter((p) => inDateRange(p.date, range))
+        .map((p) => ({ date: p.date, value: p.ratio }));
     }
     return pivotByDate(seriesByTicker, liquidTickers);
-  }, [filteredLiquid, liquidTickers]);
+  }, [filteredLiquid, liquidTickers, range]);
 
   return (
     <>
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+      </div>
+
       <StockFilterBar
         options={tickers}
         selected={selected}

@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { CompanyMetrics, PricePoint } from "@/lib/db";
+import type { PricePoint } from "@/lib/db";
+import { computeCompanyStats, type CompanyStats } from "@/lib/metrics";
+import { inDateRange, type DateRange } from "@/lib/timeseries";
 import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 import CandlestickChart from "@/components/charts/CandlestickChart";
 
 type Ticker = { ticker: string; sector: string };
 
 const COMPARISON_METRICS: {
-  key: keyof CompanyMetrics;
+  key: keyof CompanyStats;
   label: string;
   suffix: string;
   isReturn?: boolean;
@@ -23,17 +26,13 @@ const COMPARISON_METRICS: {
 const selectClasses =
   "rounded-lg border border-border bg-surface p-2 text-sm text-text-primary";
 
-export default function CompareClient({
-  tickers,
-  metrics,
-}: {
-  tickers: Ticker[];
-  metrics: CompanyMetrics[];
-}) {
+export default function CompareClient({ tickers }: { tickers: Ticker[] }) {
   const [stock1, setStock1] = useState(tickers[0]?.ticker ?? "");
   const [stock2, setStock2] = useState(tickers[1]?.ticker ?? tickers[0]?.ticker ?? "");
   const [history, setHistory] = useState<Record<string, PricePoint[]>>({});
   const [loadedKey, setLoadedKey] = useState("");
+  const [range, setRange] = useState<DateRange>({ start: "", end: "" });
+  const [rangeResetKey, setRangeResetKey] = useState("");
 
   const selectionKey = [...new Set([stock1, stock2])].sort().join(",");
 
@@ -58,17 +57,51 @@ export default function CompareClient({
 
   const loading = loadedKey !== selectionKey;
 
-  const m1 = useMemo(() => metrics.find((m) => m.company === stock1), [metrics, stock1]);
-  const m2 = useMemo(() => metrics.find((m) => m.company === stock2), [metrics, stock2]);
+  const allDates = useMemo(
+    () => [stock1, stock2].flatMap((t) => (history[t] ?? []).map((h) => h.date)),
+    [history, stock1, stock2]
+  );
+  const minDate = allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : "";
+  const maxDate = allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : "";
+
+  // Reset to the full available window whenever a new pair's data finishes loading
+  // (initial load or a ticker swap), so the range default is always "full history".
+  // Adjusting state directly during render (rather than in an effect) avoids an
+  // extra commit/cascading-render cycle — React re-renders immediately with the
+  // updated state before the browser paints.
+  if (loadedKey && loadedKey !== rangeResetKey) {
+    setRangeResetKey(loadedKey);
+    setRange({ start: minDate, end: maxDate });
+  }
+
+  const m1 = useMemo(() => {
+    const filtered = (history[stock1] ?? []).filter((h) => inDateRange(h.date, range));
+    if (filtered.length === 0) return undefined;
+    return computeCompanyStats(
+      filtered.map((h) => h.closingPrice),
+      filtered.map((h) => h.turnover)
+    );
+  }, [history, stock1, range]);
+
+  const m2 = useMemo(() => {
+    const filtered = (history[stock2] ?? []).filter((h) => inDateRange(h.date, range));
+    if (filtered.length === 0) return undefined;
+    return computeCompanyStats(
+      filtered.map((h) => h.closingPrice),
+      filtered.map((h) => h.turnover)
+    );
+  }, [history, stock2, range]);
 
   const candlesFor = (ticker: string) =>
-    (history[ticker] ?? []).map((h) => ({
-      date: h.date,
-      open: h.openingPrice,
-      high: h.high,
-      low: h.low,
-      close: h.closingPrice,
-    }));
+    (history[ticker] ?? [])
+      .filter((h) => inDateRange(h.date, range))
+      .map((h) => ({
+        date: h.date,
+        open: h.openingPrice,
+        high: h.high,
+        low: h.low,
+        close: h.closingPrice,
+      }));
 
   return (
     <div className="space-y-8">
@@ -102,6 +135,12 @@ export default function CompareClient({
           </select>
         </label>
       </div>
+
+      {minDate && maxDate && (
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+        </div>
+      )}
 
       {m1 && m2 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

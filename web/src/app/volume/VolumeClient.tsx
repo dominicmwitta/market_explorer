@@ -2,29 +2,44 @@
 
 import { useMemo, useState } from "react";
 import StockFilterBar from "@/components/StockFilterBar";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 import TopTurnoverChart from "@/components/charts/TopTurnoverChart";
 import TurnoverTreemapChart from "@/components/charts/TurnoverTreemapChart";
 import DailyTurnoverAreaChart from "@/components/charts/DailyTurnoverAreaChart";
-import type { CompanyDailyTurnoverPoint, CompanyMetrics } from "@/lib/db";
+import { computeMetricsForRange } from "@/lib/metrics";
+import { inDateRange, type DateRange } from "@/lib/timeseries";
+import type { PricePoint } from "@/lib/db";
+
+type TickerMeta = { ticker: string; sector: string; fullName: string };
 
 export default function VolumeClient({
-  metrics,
-  dailyTurnoverByCompany,
+  tickers,
+  history,
 }: {
-  metrics: CompanyMetrics[];
-  dailyTurnoverByCompany: Record<string, CompanyDailyTurnoverPoint[]>;
+  tickers: TickerMeta[];
+  history: Record<string, PricePoint[]>;
 }) {
+  const allDates = Object.values(history).flatMap((points) => points.map((p) => p.date));
+  const minDate = allDates.length > 0 ? allDates.reduce((a, b) => (b < a ? b : a)) : "";
+  const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => (b > a ? b : a)) : "";
+
+  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(metrics.map((m) => m.company))
+    () => new Set(tickers.map((t) => t.ticker))
+  );
+
+  const metrics = useMemo(
+    () => computeMetricsForRange(tickers, history, range),
+    [tickers, history, range]
   );
 
   const options = useMemo(
-    () => metrics.map((m) => ({ ticker: m.company, sector: m.sector })),
-    [metrics]
+    () => tickers.map((t) => ({ ticker: t.ticker, sector: t.sector })),
+    [tickers]
   );
   const fullNameByTicker = useMemo(
-    () => Object.fromEntries(metrics.map((m) => [m.company, m.fullName])),
-    [metrics]
+    () => Object.fromEntries(tickers.map((t) => [t.ticker, t.fullName])),
+    [tickers]
   );
 
   const filtered = useMemo(
@@ -52,14 +67,15 @@ export default function VolumeClient({
   const dailyTurnover = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const ticker of selected) {
-      for (const point of dailyTurnoverByCompany[ticker] ?? []) {
+      for (const point of history[ticker] ?? []) {
+        if (!inDateRange(point.date, range)) continue;
         byDate.set(point.date, (byDate.get(point.date) ?? 0) + point.turnover);
       }
     }
     return [...byDate.entries()]
       .map(([date, totalTurnover]) => ({ date, totalTurnover }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [selected, dailyTurnoverByCompany]);
+  }, [selected, history, range]);
 
   function toggle(ticker: string) {
     setSelected((prev) => {
@@ -77,9 +93,13 @@ export default function VolumeClient({
           options={options}
           selected={selected}
           onToggle={toggle}
-          onSelectAll={() => setSelected(new Set(metrics.map((m) => m.company)))}
+          onSelectAll={() => setSelected(new Set(tickers.map((t) => t.ticker)))}
           onClearAll={() => setSelected(new Set())}
         />
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
 
       {filtered.length === 0 ? (

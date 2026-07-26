@@ -36,9 +36,18 @@ export default function PeriodFilterBar({
   value: DateRange;
   onChange: (range: DateRange) => void;
 }) {
-  const activePresetLabel = PRESETS.find(
-    (p) => value.start === presetStart(maxDate, p.days, minDate) && value.end === maxDate
-  )?.label;
+  // When the available history is shorter than a preset's window, that preset's
+  // start clamps to minDate — the same value "All" resolves to. Check "All"
+  // first so it wins in that case rather than whichever shorter preset happens
+  // to appear first in the array.
+  const activePresetLabel =
+    value.end === maxDate
+      ? value.start === minDate
+        ? "All"
+        : PRESETS.find(
+            (p) => p.days !== null && value.start === presetStart(maxDate, p.days, minDate)
+          )?.label
+      : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-3">

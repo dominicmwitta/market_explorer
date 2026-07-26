@@ -1,10 +1,10 @@
-import { getMarketMetrics, getTickers } from "@/lib/db";
+import { getTickers } from "@/lib/db";
 import CompareClient from "./CompareClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function ComparePage() {
-  const [tickers, metrics] = await Promise.all([getTickers(), getMarketMetrics()]);
+  const tickers = await getTickers();
 
   return (
     <div className="space-y-8">
@@ -15,7 +15,7 @@ export default async function ComparePage() {
         </p>
       </div>
 
-      <CompareClient tickers={tickers} metrics={metrics} />
+      <CompareClient tickers={tickers} />
     </div>
   );
 }

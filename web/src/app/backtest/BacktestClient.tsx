@@ -4,12 +4,21 @@ import { useState, useTransition } from "react";
 import { runBacktestAction } from "./actions";
 import type { BacktestResult } from "@/lib/backtest";
 import { formatPct } from "@/lib/format";
+import { type DateRange } from "@/lib/timeseries";
 import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PortfolioValueChart from "@/components/charts/PortfolioValueChart";
+import PeriodFilterBar from "@/components/PeriodFilterBar";
 
-export default function BacktestClient() {
+export default function BacktestClient({
+  minDate,
+  maxDate,
+}: {
+  minDate: string;
+  maxDate: string;
+}) {
   const [topN, setTopN] = useState(5);
+  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -18,7 +27,7 @@ export default function BacktestClient() {
     setError(null);
     startTransition(async () => {
       try {
-        const res = await runBacktestAction(topN);
+        const res = await runBacktestAction(topN, range);
         setResult(res);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Backtest failed");
@@ -33,21 +42,26 @@ export default function BacktestClient() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <label htmlFor="top-n" className="text-sm font-medium text-text-primary">
-          Number of top stocks to hold: <span className="tabular-nums">{topN}</span>
-        </label>
-        <input
-          id="top-n"
-          type="range"
-          min={1}
-          max={15}
-          step={1}
-          value={topN}
-          onChange={(e) => setTopN(Number(e.target.value))}
-          className="mt-3 w-full max-w-md"
-        />
-        <div className="mt-4">
+      <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
+        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+
+        <div>
+          <label htmlFor="top-n" className="text-sm font-medium text-text-primary">
+            Number of top stocks to hold: <span className="tabular-nums">{topN}</span>
+          </label>
+          <input
+            id="top-n"
+            type="range"
+            min={1}
+            max={15}
+            step={1}
+            value={topN}
+            onChange={(e) => setTopN(Number(e.target.value))}
+            className="mt-3 w-full max-w-md"
+          />
+        </div>
+
+        <div>
           <button
             type="button"
             onClick={handleRun}
