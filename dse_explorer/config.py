@@ -6,7 +6,7 @@ COMPANY_NAMES = [
     'AFRIPRISE', 'CRDB', 'DCB', 'DSE', 'EABL', 'JATU', 'JHL', 'KA', 'KCB',
     'MBP', 'MCB', 'MKCB', 'MUCOBA', 'NICO', 'NMB', 'NMG', 'PAL', 'SWALA',
     'SWIS', 'TBL', 'TCC', 'TCCL', 'TOL', 'TPCC', 'TTP', 'USL', 'VODA', 'YETU',
-    'IEACLC-ETF', 'VERTEX-ETF'
+    'ITRUST ETF', 'VERTEX ETF'
 ]
 
 COLUMN_NAMES = [
@@ -21,14 +21,14 @@ REPORTS_DIR = 'reports'
 EXCLUDED_TICKERS = ['JATU']
 
 SECTOR_MAP = {
-    "Banking": ["CRDB", "DCB", "KCB", "MCB", "MKCB", "MUCOBA", "NMB", "YETU"],
+    "Banking": ["CRDB", "DCB", "KCB", "MBP", "MCB", "MKCB", "MUCOBA", "NMB", "YETU"],
     "Manufacturing": ["TBL", "TCC", "TCCL", "TPCC"],
-    "Agriculture": ["KA", "MBP"],
+    "Agriculture": ["KA"],
     "Telecommunications": ["VODA"],
     "Insurance": ["NICO"],
     "Investment": ["DSE", "SWALA", "SWIS", "NMG", "JHL"],
     "Services": ["AFRIPRISE", "JATU", "PAL", "TOL", "TTP", "USL", "EABL"],
-    "ETFs": ["IEACLC-ETF", "VERTEX-ETF"],
+    "ETFs": ["ITRUST ETF", "VERTEX ETF"],
 }
 
 

@@ -1,25 +1,81 @@
 """Composed DSE data pipeline: scraper -> PDF fallback -> compare -> merge."""
 
+import difflib
+
 import pandas as pd
 
+from dse_explorer.config import SECTOR_MAP
 from dse_explorer.logger import get_logger
 from dse_explorer.equity_scraper import scrape_equity_table
 from dse_explorer.pdf_extract import extract_equity_prices
 
-# Canonical names: map old/alternate ticker names to current DSE names.
-# The PDF often lags behind the website when ETFs are renamed.
+# Canonical names: map old/alternate ticker names to current DSE names (real
+# renames, e.g. when an ETF's ticker changed on the website but the PDF
+# report still lags behind). One-off scraping *glitches* (truncation, stray
+# whitespace, typos) are instead caught generically by _find_glitch_match.
 _TICKER_ALIASES = {
     "IEACLC-ETF": "ITRUST ETF",
     "VERTEX-ETF": "VERTEX ETF",
 }
 
+_KNOWN_TICKERS = {ticker for tickers in SECTOR_MAP.values() for ticker in tickers}
+
+
+def _find_glitch_match(ticker: str) -> str | None:
+    """Try to recognize a mangled ticker as a known one.
+
+    Handles the common scraping/PDF-extraction glitches seen in practice:
+    stray whitespace, and truncation of a multi-word ticker (e.g. the
+    "VERTEX ETF" -> "VERTEX ET" incident). Only returns a correction when
+    exactly one known ticker is a plausible match, so a genuinely new
+    listing is never silently mapped onto an unrelated existing one.
+    """
+    cleaned = " ".join(ticker.split()).upper()
+    if cleaned in _KNOWN_TICKERS:
+        return cleaned
+
+    prefix_matches = [
+        known for known in _KNOWN_TICKERS
+        if known.startswith(cleaned) or cleaned.startswith(known)
+    ]
+    if len(prefix_matches) == 1:
+        return prefix_matches[0]
+
+    close_matches = difflib.get_close_matches(cleaned, _KNOWN_TICKERS, n=2, cutoff=0.85)
+    if len(close_matches) == 1:
+        return close_matches[0]
+
+    return None
+
 
 def _normalize_companies(df):
-    """Replace legacy ticker names with current DSE names."""
+    """Replace legacy/mis-scraped ticker names with current DSE names."""
     if df is None:
         return None
     df = df.copy()
     df["Company"] = df["Company"].replace(_TICKER_ALIASES)
+
+    unknown = set(df["Company"].unique()) - _KNOWN_TICKERS
+    corrections = {}
+    unresolved = []
+    for ticker in unknown:
+        match = _find_glitch_match(ticker)
+        if match:
+            corrections[ticker] = match
+            log.warning(f"Auto-corrected likely scraping glitch: '{ticker}' -> '{match}'")
+        else:
+            unresolved.append(ticker)
+
+    if corrections:
+        df["Company"] = df["Company"].replace(corrections)
+
+    if unresolved:
+        log.warning(
+            f"Unrecognized ticker(s) not in config.SECTOR_MAP: {sorted(unresolved)} — "
+            "verify this is a real new listing (not a scraping glitch) and add it "
+            "to SECTOR_MAP, otherwise it will be stored with sector='Unknown'"
+        )
+
     return df
 
 
