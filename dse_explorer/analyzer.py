@@ -10,22 +10,19 @@ from pathlib import Path
 import argparse
 
 from dse_explorer.config import SECTOR_MAP, get_sector
+from dse_explorer.db import get_engine, read_daily_prices
 
 
 class StockAnalyzer:
     """Analyzes DSE stock data to identify best performers."""
 
-    def __init__(self, csv_path: str = "dse_equity_daily.csv"):
-        self.csv_path = Path(csv_path)
+    def __init__(self):
         self.df = None
         self.analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     def load_data(self) -> pd.DataFrame:
-        """Load and preprocess the stock data."""
-        if not self.csv_path.exists():
-            raise FileNotFoundError(f"Data file not found: {self.csv_path}")
-
-        self.df = pd.read_csv(self.csv_path)
+        """Load and preprocess the stock data from the database."""
+        self.df = read_daily_prices(get_engine())
 
         # Parse dates
         self.df['Date'] = pd.to_datetime(self.df['Date'], format='%Y-%m-%d')
@@ -139,7 +136,9 @@ class StockAnalyzer:
             else:
                 ratio = float("inf") if bids > 0 else 0.0
 
-            if ratio > 1.5:
+            if offers == 0 and bids > 0:
+                pressure = "Strong Buy Pressure (No Offers)"
+            elif ratio > 1.5:
                 pressure = "Strong Buy Pressure"
             elif ratio < 0.67:
                 pressure = "Sell Pressure"
@@ -790,8 +789,6 @@ class StockAnalyzer:
 
 def main():
     parser = argparse.ArgumentParser(description='DSE Stock Performance Analyzer')
-    parser.add_argument('--data', '-d', default='dse_equity_daily.csv',
-                       help='Path to the stock data CSV file')
     parser.add_argument('--output', '-o', default=None,
                        help='Path to save the report (optional)')
     parser.add_argument('--export-csv', '-e', default=None,
@@ -801,11 +798,11 @@ def main():
 
     args = parser.parse_args()
 
-    analyzer = StockAnalyzer(args.data)
+    analyzer = StockAnalyzer()
 
     try:
         analyzer.load_data()
-    except FileNotFoundError as e:
+    except Exception as e:
         print(f"Error: {e}")
         return 1
 

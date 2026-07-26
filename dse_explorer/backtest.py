@@ -5,19 +5,20 @@ import argparse
 import pandas as pd
 import numpy as np
 
+from dse_explorer.db import get_engine, read_daily_prices
+
 
 class MomentumBacktest:
     """Buy top-N stocks by previous day's return, equal weight, daily rebalance."""
 
-    def __init__(self, csv_path: str = "dse_equity_daily.csv", top_n: int = 5):
-        self.csv_path = csv_path
+    def __init__(self, top_n: int = 5):
         self.top_n = top_n
         self.df = None
         self.portfolio_values: list[dict] = []
         self.daily_holdings: list[dict] = []
 
     def _load(self) -> pd.DataFrame:
-        df = pd.read_csv(self.csv_path)
+        df = read_daily_prices(get_engine())
         df["Date"] = pd.to_datetime(df["Date"])
         df = df.sort_values(["Date", "Company"]).reset_index(drop=True)
         self.df = df
@@ -115,16 +116,15 @@ class MomentumBacktest:
 
 def main():
     parser = argparse.ArgumentParser(description="DSE Momentum Backtesting")
-    parser.add_argument("--data", default="dse_equity_daily.csv", help="CSV data file")
     parser.add_argument("--top-n", type=int, default=5, help="Number of top stocks to hold")
 
     args = parser.parse_args()
 
-    bt = MomentumBacktest(csv_path=args.data, top_n=args.top_n)
+    bt = MomentumBacktest(top_n=args.top_n)
     try:
         results = bt.run()
-    except FileNotFoundError:
-        print(f"Error: data file '{args.data}' not found. Run the scraper first.")
+    except Exception as e:
+        print(f"Error: {e}")
         return 1
 
     print("=" * 50)

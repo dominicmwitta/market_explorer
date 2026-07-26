@@ -23,6 +23,9 @@ env/
 !dse_equity_daily.csv
 dse_reports/
 reports/
+report.txt
+watchlist.json
+alerts.json
 
 # Logs
 logs/
@@ -35,6 +38,7 @@ build/
 
 # Credentials
 email_config.json
+.env
 
 # Misc
 nul

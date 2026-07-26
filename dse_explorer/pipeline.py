@@ -1,13 +1,10 @@
 """Composed DSE data pipeline: scraper -> PDF fallback -> compare -> merge."""
 
-import os
 import pandas as pd
 
 from dse_explorer.logger import get_logger
 from dse_explorer.equity_scraper import scrape_equity_table
 from dse_explorer.pdf_extract import extract_equity_prices
-
-OUTPUT_FILE = "dse_equity_daily.csv"
 
 # Canonical names: map old/alternate ticker names to current DSE names.
 # The PDF often lags behind the website when ETFs are renamed.
@@ -206,30 +203,26 @@ def pick_best(equity_df, scraper_df, pdf_df):
 
 
 # ------------------------------------------------------------------
-# Step 4: Update Master CSV
+# Step 4: Update Master Database
 # ------------------------------------------------------------------
-def update_master_csv(new_df):
-    """Append new data to master CSV, deduplicating by Date+Company."""
-    log.info("--- Step 4: Updating Master CSV ---")
+def update_master_db(new_df, source: str):
+    """Upsert today's rows into Postgres and return the full active history."""
+    log.info("--- Step 4: Updating Master Database ---")
 
-    if os.path.exists(OUTPUT_FILE):
-        existing = pd.read_csv(OUTPUT_FILE)
-        existing = _normalize_companies(existing)
-        log.info(f"Loaded {len(existing)} existing rows from {OUTPUT_FILE}")
-        combined = pd.concat([existing, new_df], ignore_index=True)
-    else:
-        combined = new_df.copy()
+    from dse_explorer.db import (
+        create_schema, get_engine, read_daily_prices, upsert_companies, upsert_prices,
+    )
 
-    before = len(combined)
-    combined = combined.drop_duplicates(subset=["Date", "Company"], keep="last")
-    combined = combined.sort_values(["Date", "Company"]).reset_index(drop=True)
-    after = len(combined)
+    engine = get_engine()
+    create_schema(engine)
 
-    if before != after:
-        log.info(f"Deduplication: {before} -> {after} rows")
+    new_df = _normalize_companies(new_df)
+    upsert_companies(engine, set(new_df["Company"].unique()))
+    n = upsert_prices(engine, new_df, source=source)
+    log.info(f"Upserted {n} rows (source={source})")
 
-    combined.to_csv(OUTPUT_FILE, index=False)
-    log.info(f"Saved {after} rows to {OUTPUT_FILE}")
+    combined = read_daily_prices(engine)
+    log.info(f"{len(combined)} total active rows in database")
     return combined
 
 
@@ -286,7 +279,7 @@ def main():
         return
 
     rows_scraped = len(result)
-    final = update_master_csv(result)
+    final = update_master_db(result, source=source)
     print(final.to_string())
 
     # Check price alerts

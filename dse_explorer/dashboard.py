@@ -9,34 +9,11 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 
-import requests
-
 from dse_explorer.config import SECTOR_MAP, get_sector
-
-GITHUB_CSV_URL = (
-    "https://raw.githubusercontent.com/dominicmwitta/market_explorer"
-    "/main/dse_equity_daily.csv"
-)
-LOCAL_CSV = "dse_equity_daily.csv"
-
-
-def sync_from_github() -> bool:
-    """Download the latest CSV from GitHub and save locally.
-
-    Returns True on success, False on failure.
-    """
-    try:
-        resp = requests.get(GITHUB_CSV_URL, timeout=30)
-        resp.raise_for_status()
-        Path(LOCAL_CSV).write_bytes(resp.content)
-        return True
-    except Exception:
-        return False
-
+from dse_explorer.db import get_engine, read_daily_prices
 
 # Page config
 st.set_page_config(
@@ -48,9 +25,9 @@ st.set_page_config(
 
 
 @st.cache_data
-def load_data(csv_path: str = "dse_equity_daily.csv") -> pd.DataFrame:
-    """Load and preprocess stock data."""
-    df = pd.read_csv(csv_path)
+def load_data() -> pd.DataFrame:
+    """Load and preprocess stock data from the database."""
+    df = read_daily_prices(get_engine())
     df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
     df = df.sort_values(['Company', 'Date'])
     return df
@@ -114,25 +91,12 @@ def main():
     # Title
     st.title("\U0001F4CA DSE Stock Analytics Dashboard")
 
-    # Auto-sync from GitHub on first load
-    if "data_synced" not in st.session_state:
-        with st.spinner("Downloading latest data from GitHub..."):
-            if sync_from_github():
-                st.session_state["data_synced"] = True
-                st.session_state["sync_status"] = "Synced from GitHub"
-            else:
-                st.session_state["data_synced"] = True  # don't retry every rerun
-                st.session_state["sync_status"] = "Sync failed — using local data"
-
     # Load data
     try:
         df = load_data()
         metrics = calculate_metrics(df)
-    except FileNotFoundError:
-        st.error(
-            "Data file not found. Check your internet connection and "
-            "click **Refresh data from GitHub** in the sidebar."
-        )
+    except Exception as e:
+        st.error(f"Could not load data from the database: {e}")
         return
 
     # Date range info
@@ -151,20 +115,13 @@ def main():
     except Exception:
         pass
 
-    # Sidebar: data sync controls
+    # Sidebar: data source controls
     st.sidebar.header("\U0001F4E1 Data Source")
-    st.sidebar.caption(st.session_state.get("sync_status", ""))
-    if st.sidebar.button("Refresh data from GitHub"):
-        with st.spinner("Downloading..."):
-            if sync_from_github():
-                st.session_state["sync_status"] = (
-                    f"Synced {datetime.now().strftime('%H:%M:%S')}"
-                )
-                load_data.clear()
-                calculate_metrics.clear()
-                st.rerun()
-            else:
-                st.sidebar.error("Download failed. Check connection.")
+    st.sidebar.caption(f"Last refreshed {datetime.now().strftime('%H:%M:%S')}")
+    if st.sidebar.button("Refresh data"):
+        load_data.clear()
+        calculate_metrics.clear()
+        st.rerun()
 
     st.sidebar.markdown("---")
 
@@ -214,11 +171,19 @@ def main():
         format="DD MMM YYYY"
     )
 
+    # Recompute metrics over just the selected date range so rankings/tables
+    # match what the date-filtered charts below are showing.
+    date_range_df = df[
+        (df['Date'] >= pd.Timestamp(date_slider[0])) &
+        (df['Date'] <= pd.Timestamp(date_slider[1]))
+    ]
+    range_metrics = calculate_metrics(date_range_df)
+
     # Filter metrics
-    filtered_metrics = metrics[
-        (metrics['Company'].isin(selected_companies)) &
-        (metrics['Current_Price'] >= price_range[0]) &
-        (metrics['Current_Price'] <= price_range[1])
+    filtered_metrics = range_metrics[
+        (range_metrics['Company'].isin(selected_companies)) &
+        (range_metrics['Current_Price'] >= price_range[0]) &
+        (range_metrics['Current_Price'] <= price_range[1])
     ]
 
     # ===== TOP METRICS ROW =====
@@ -272,6 +237,61 @@ def main():
     div[data-baseweb="tab-highlight"] {
         display: none;
     }
+    /* Mobile responsive styles */
+    @media (max-width: 768px) {
+        /* Stack metric columns on mobile */
+        div[data-testid="metric-container"] {
+            min-width: 120px !important;
+            padding: 8px !important;
+        }
+        /* Smaller charts on mobile */
+        .js-plotly-plot {
+            max-width: 100% !important;
+        }
+        /* Better sidebar on mobile */
+        [data-testid="stSidebar"] {
+            width: 85vw !important;
+        }
+        /* Tab text smaller on mobile */
+        div[data-baseweb="tab-list"] button {
+            font-size: 11px !important;
+            padding: 6px 2px !important;
+        }
+        /* Data table mobile friendly */
+        [data-testid="stDataFrame"] {
+            font-size: 12px !important;
+        }
+        /* Block spacing reduced */
+        [data-testid="stHorizontalBlock"] {
+            gap: 4px !important;
+        }
+    }
+    /* Install prompt banner */
+    .pwa-install-banner {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #1e3a5f, #2d5a87);
+        color: white;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 9999;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    }
+    .pwa-install-banner.hidden {
+        display: none;
+    }
+    .pwa-install-btn {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -301,7 +321,7 @@ def main():
                 labels={'Total_Return': 'Return (%)', 'Company': ''}
             )
             fig.update_layout(height=400, showlegend=False, yaxis={'categoryorder': 'total ascending'})
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         with col2:
             st.subheader(f"Worst Performers ({date_min.strftime('%d %b')} - {date_max.strftime('%d %b %Y')})")
@@ -317,7 +337,7 @@ def main():
                 labels={'Total_Return': 'Return (%)', 'Company': ''}
             )
             fig.update_layout(height=400, showlegend=False, yaxis={'categoryorder': 'total descending'})
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Risk-adjusted performance
         st.subheader("Risk-Adjusted Performance (Sharpe Ratio)")
@@ -332,7 +352,7 @@ def main():
             labels={'Sharpe_Ratio': 'Sharpe Ratio', 'Total_Return': 'Return %'}
         )
         fig.update_layout(height=350)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 2: Price Trends
     with tab2:
@@ -362,7 +382,7 @@ def main():
                 markers=True
             )
             fig.update_layout(height=450, hovermode='x unified')
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
             # Normalized comparison (base 100)
             st.subheader("Normalized Price Comparison (Base = 100)")
@@ -387,7 +407,57 @@ def main():
                 )
                 fig.add_hline(y=100, line_dash="dash", line_color="gray", annotation_text="Base")
                 fig.update_layout(height=400)
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, width="stretch", config={"responsive": True})
+
+        # Month-end prices for the most liquid stocks
+        st.subheader("Month-End Prices — Top 10 Most Liquid Stocks")
+        st.caption("Liquidity ranked by total turnover over the selected date range.")
+
+        liquid_top10 = range_metrics.nlargest(10, 'Total_Turnover')['Company'].tolist()
+
+        liquid_df = df[
+            (df['Company'].isin(liquid_top10)) &
+            (df['Date'] >= pd.Timestamp(date_slider[0])) &
+            (df['Date'] <= pd.Timestamp(date_slider[1]))
+        ].copy()
+        liquid_df['Month'] = liquid_df['Date'].dt.to_period('M')
+
+        month_end = (
+            liquid_df.sort_values('Date')
+            .groupby(['Company', 'Month'], as_index=False)
+            .last()[['Company', 'Month', 'Date', 'Closing_Price']]
+        )
+        month_end['Month_Label'] = month_end['Month'].dt.strftime('%b %Y')
+
+        fig = px.line(
+            month_end.sort_values('Date'),
+            x='Date',
+            y='Closing_Price',
+            color='Company',
+            category_orders={'Company': liquid_top10},
+            labels={'Closing_Price': 'Price (TZS)', 'Date': ''},
+            markers=True
+        )
+        fig.update_layout(height=450, hovermode='x unified')
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
+
+        month_order = (
+            month_end.drop_duplicates('Month').sort_values('Date')['Month_Label'].tolist()
+        )
+        price_table = (
+            month_end.pivot(index='Company', columns='Month_Label', values='Closing_Price')
+            .reindex(index=liquid_top10, columns=month_order)
+            .reset_index()
+        )
+        st.dataframe(
+            price_table,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                col: st.column_config.NumberColumn(col, format="localized")
+                for col in month_order
+            },
+        )
 
     # TAB 3: Returns Analysis
     with tab3:
@@ -404,7 +474,7 @@ def main():
             )
             fig.add_vline(x=0, line_dash="dash", line_color="red")
             fig.update_layout(height=350)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         with col2:
             st.subheader("Return vs Volatility")
@@ -420,7 +490,7 @@ def main():
             )
             fig.add_hline(y=0, line_dash="dash", line_color="gray")
             fig.update_layout(height=350)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Latest day momentum
         st.subheader("Latest Day Momentum")
@@ -439,7 +509,7 @@ def main():
             yaxis_title='Return (%)',
             xaxis_title=''
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 4: Volume Analysis
     with tab4:
@@ -456,7 +526,7 @@ def main():
             labels={'Total_Turnover': 'Turnover (TZS)', 'Total_Return': 'Return %'}
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Volume treemap
         st.subheader("Market Share by Turnover")
@@ -471,7 +541,7 @@ def main():
             color_continuous_midpoint=0
         )
         fig.update_layout(height=450)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Volume over time
         st.subheader("Daily Turnover Trend")
@@ -489,7 +559,7 @@ def main():
             labels={'Turnover': 'Total Turnover (TZS)', 'Date': ''}
         )
         fig.update_layout(height=300)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 5: Stock Comparison
     with tab5:
@@ -561,7 +631,7 @@ def main():
 
             fig.update_layout(height=500, showlegend=False)
             fig.update_xaxes(rangeslider_visible=False)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 6: Technical Analysis
     with tab6:
@@ -661,9 +731,9 @@ def main():
                 row=3, col=1
             )
 
-            fig.update_layout(height=700, xaxis3_rangeslider_visible=False)
+            fig.update_layout(height=550, xaxis3_rangeslider_visible=False)
             fig.update_xaxes(rangeslider_visible=False)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 7: Market Intelligence
     with tab7:
@@ -687,7 +757,16 @@ def main():
             return ""
 
         ob_display = order_book.copy()
-        st.dataframe(ob_display, width="stretch", height=300)
+        st.dataframe(
+            ob_display,
+            width="stretch",
+            height=300,
+            column_config={
+                "Outstanding_Bids": st.column_config.NumberColumn("Outstanding_Bids", format="localized"),
+                "Outstanding_Offers": st.column_config.NumberColumn("Outstanding_Offers", format="localized"),
+                "Bid_Offer_Ratio": st.column_config.NumberColumn("Bid_Offer_Ratio", format="%.2f"),
+            },
+        )
 
         # Bid/Offer ratio bar chart
         ob_chart = order_book[order_book['Bid_Offer_Ratio'].notna()].copy()
@@ -703,13 +782,21 @@ def main():
             )
             fig.add_hline(y=1, line_dash="dash", line_color="gray")
             fig.update_layout(height=350)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Volume Spike Alerts
         st.markdown("### Volume Spike Alerts")
         vol_spikes = analyzer.detect_volume_spikes()
         if not vol_spikes.empty:
-            st.dataframe(vol_spikes, width="stretch")
+            st.dataframe(
+                vol_spikes,
+                width="stretch",
+                column_config={
+                    "Latest_Volume": st.column_config.NumberColumn("Latest_Volume", format="localized"),
+                    "Avg_Volume": st.column_config.NumberColumn("Avg_Volume", format="localized"),
+                    "Spike_Ratio": st.column_config.NumberColumn("Spike_Ratio", format="%.2fx"),
+                },
+            )
         else:
             st.info("No volume spikes detected (threshold: 2x average)")
 
@@ -744,7 +831,7 @@ def main():
                 labels=dict(color="Correlation"),
             )
             fig.update_layout(height=500)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # TAB 8: Sector Analysis
     with tab8:
@@ -768,7 +855,7 @@ def main():
             labels={'Avg_Return': 'Avg Return (%)'}
         )
         fig.update_layout(height=350)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Sector treemap by turnover
         st.markdown("### Sector Market Share (by Turnover)")
@@ -782,11 +869,18 @@ def main():
             color_continuous_midpoint=0
         )
         fig.update_layout(height=500)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Sector comparison table
         st.markdown("### Sector Comparison")
-        st.dataframe(sector_perf, width="stretch")
+        st.dataframe(
+            sector_perf,
+            width="stretch",
+            column_config={
+                "Avg_Return": st.column_config.NumberColumn("Avg_Return", format="%.2f%%"),
+                "Total_Turnover": st.column_config.NumberColumn("Total_Turnover (TZS)", format="compact"),
+            },
+        )
 
     # TAB 9: Backtesting
     with tab9:
@@ -825,11 +919,20 @@ def main():
                     for d in latest["Details"]:
                         holdings_rows.append({
                             "Stock": d["Stock"],
-                            "Weight": f"{100 / len(latest['Details']):.1f}%",
-                            "Prev Day Return": f"{d['Prev_Return_Pct']:+.2f}%",
-                            "Day Return": f"{d['Day_Return_Pct']:+.2f}%" if d["Day_Return_Pct"] is not None else "N/A",
+                            "Weight": 100 / len(latest['Details']),
+                            "Prev Day Return": d['Prev_Return_Pct'],
+                            "Day Return": d["Day_Return_Pct"],
                         })
-                    st.dataframe(pd.DataFrame(holdings_rows), hide_index=True, width="stretch")
+                    st.dataframe(
+                        pd.DataFrame(holdings_rows),
+                        hide_index=True,
+                        width="stretch",
+                        column_config={
+                            "Weight": st.column_config.NumberColumn("Weight", format="%.1f%%"),
+                            "Prev Day Return": st.column_config.NumberColumn("Prev Day Return", format="%+.2f%%"),
+                            "Day Return": st.column_config.NumberColumn("Day Return", format="%+.2f%%"),
+                        },
+                    )
 
                 # Holdings history
                 if bt.daily_holdings:
@@ -839,10 +942,18 @@ def main():
                         history_rows.append({
                             "Date": entry["Date"].strftime("%Y-%m-%d"),
                             "Stocks Held": ", ".join(entry["Stocks"]),
-                            "Portfolio Return": f"{entry['Portfolio_Return_Pct']:+.2f}%",
+                            "Portfolio Return": entry['Portfolio_Return_Pct'],
                         })
                     hist_df = pd.DataFrame(history_rows)
-                    st.dataframe(hist_df, hide_index=True, height=300, width="stretch")
+                    st.dataframe(
+                        hist_df,
+                        hide_index=True,
+                        height=300,
+                        width="stretch",
+                        column_config={
+                            "Portfolio Return": st.column_config.NumberColumn("Portfolio Return", format="%+.2f%%"),
+                        },
+                    )
 
                 # Portfolio value chart
                 if bt.portfolio_values:
@@ -860,21 +971,33 @@ def main():
                     fig.add_hline(y=100, line_dash="dash", line_color="gray",
                                   annotation_text="Starting Value")
                     fig.update_layout(height=400)
-                    st.plotly_chart(fig, width="stretch")
+                    st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
     # ===== DATA TABLE =====
     st.markdown("---")
     st.subheader("\U0001F4CB Full Metrics Table")
 
-    # Format for display
-    display_df = filtered_metrics.copy()
-    display_df['Total_Turnover'] = display_df['Total_Turnover'].apply(lambda x: f"TZS {x:,.0f}")
-    display_df['Current_Price'] = display_df['Current_Price'].apply(lambda x: f"TZS {x:,.0f}")
-
     st.dataframe(
-        display_df,
+        filtered_metrics,
         width="stretch",
-        height=400
+        height=400,
+        column_config={
+            "Current_Price": st.column_config.NumberColumn("Current_Price (TZS)", format="localized"),
+            "Start_Price": st.column_config.NumberColumn("Start_Price (TZS)", format="localized"),
+            "Total_Turnover": st.column_config.NumberColumn("Total_Turnover (TZS)", format="compact"),
+            "Avg_Turnover": st.column_config.NumberColumn("Avg_Turnover (TZS)", format="compact"),
+            "Period_High": st.column_config.NumberColumn("Period_High (TZS)", format="localized"),
+            "Period_Low": st.column_config.NumberColumn("Period_Low (TZS)", format="localized"),
+            "Total_Return": st.column_config.NumberColumn("Total_Return", format="%.2f%%"),
+            "Avg_Daily_Return": st.column_config.NumberColumn("Avg_Daily_Return", format="%.2f%%"),
+            "Volatility": st.column_config.NumberColumn("Volatility", format="%.2f%%"),
+            "Latest_Return": st.column_config.NumberColumn("Latest_Return", format="%.2f%%"),
+            "Liquidity": st.column_config.NumberColumn("Liquidity", format="%.2f%%"),
+            "Sharpe_Ratio": st.column_config.NumberColumn(
+                "Sharpe_Ratio",
+                help="Daily average return divided by daily volatility (not annualized, no risk-free rate subtracted) — a relative ranking signal, not a textbook Sharpe ratio.",
+            ),
+        },
     )
 
     # Download buttons

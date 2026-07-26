@@ -111,8 +111,6 @@ def main():
     parser.add_argument("--list", action="store_true", help="List all alerts")
     parser.add_argument("--check", action="store_true",
                         help="Check alerts against latest data")
-    parser.add_argument("--data", default="dse_equity_daily.csv",
-                        help="CSV data file (for --check)")
 
     args = parser.parse_args()
 
@@ -122,7 +120,8 @@ def main():
     elif args.remove is not None:
         remove_alert(args.remove)
     elif args.check:
-        df = pd.read_csv(args.data)
+        from dse_explorer.db import get_engine, read_daily_prices
+        df = read_daily_prices(get_engine())
         df["Date"] = pd.to_datetime(df["Date"])
         triggered = check_alerts(df)
         if triggered:

@@ -17,10 +17,23 @@ dependencies = [
     "streamlit>=1.28.0",
     "plotly>=5.15.0",
     "openpyxl>=3.1.0",
+    "pillow>=10.0.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [tool.setuptools.packages.find]
 include = ["dse_explorer*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+dse_explorer = [
+    "pwa_assets/*.html",
+    "pwa_assets/*.json",
+    "pwa_assets/*.js",
+    "pwa_assets/icons/*.png",
+]
 
 [project.scripts]
 dse-scrape = "dse_explorer.main:main"
@@ -37,3 +50,5 @@ dse-backfill = "dse_explorer.backfill:main"
 dse-schedule = "dse_explorer.scheduler:main"
 dse-backtest = "dse_explorer.backtest:main"
 dse-notify = "dse_explorer.notifier:main"
+dse-pwa-server = "dse_explorer.pwa_server:main"
+dse-db-migrate = "dse_explorer.db_migrate:main"

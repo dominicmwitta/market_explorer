@@ -16,6 +16,10 @@ COLUMN_NAMES = [
 
 REPORTS_DIR = 'reports'
 
+# Tickers excluded from analysis/reporting (e.g. suspended or non-trading
+# stocks that would otherwise distort metrics with flat, zero-volume rows).
+EXCLUDED_TICKERS = ['JATU']
+
 SECTOR_MAP = {
     "Banking": ["CRDB", "DCB", "KCB", "MCB", "MKCB", "MUCOBA", "NMB", "YETU"],
     "Manufacturing": ["TBL", "TCC", "TCCL", "TPCC"],
