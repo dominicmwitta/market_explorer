@@ -21,13 +21,16 @@ REPORTS_DIR = 'reports'
 EXCLUDED_TICKERS = ['JATU']
 
 SECTOR_MAP = {
+    # Verified against each company's official profile at dse.co.tz/listed/company/profile
     "Banking": ["CRDB", "DCB", "KCB", "MBP", "MCB", "MKCB", "MUCOBA", "NMB", "YETU"],
-    "Manufacturing": ["TBL", "TCC", "TCCL", "TPCC"],
-    "Agriculture": ["KA"],
+    "Aviation": ["KA", "PAL", "SWIS"],  # Kenya Airways, Precision Air, Swissport Tanzania
+    "Manufacturing": ["TBL", "TCC", "TCCL", "TPCC", "TOL", "TTP", "EABL"],
     "Telecommunications": ["VODA"],
-    "Insurance": ["NICO"],
-    "Investment": ["DSE", "SWALA", "SWIS", "NMG", "JHL"],
-    "Services": ["AFRIPRISE", "JATU", "PAL", "TOL", "TTP", "USL", "EABL"],
+    "Investment": ["DSE", "JHL", "NICO", "AFRIPRISE"],
+    "Energy": ["SWALA"],  # Swala Gas and Oil (oil & gas exploration)
+    "Media": ["NMG"],  # Nation Media Group
+    "Retail": ["USL"],  # Uchumi Supermarkets
+    "Agriculture": ["JATU"],
     "ETFs": ["ITRUST ETF", "VERTEX ETF"],
 }
 
