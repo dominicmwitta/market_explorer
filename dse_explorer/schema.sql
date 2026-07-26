@@ -3,8 +3,12 @@
 CREATE TABLE IF NOT EXISTS companies (
     ticker      text PRIMARY KEY,
     sector      text NOT NULL DEFAULT 'Unknown',
-    active      boolean NOT NULL DEFAULT true
+    active      boolean NOT NULL DEFAULT true,
+    full_name   text
 );
+
+-- Idempotent for pre-existing databases created before full_name existed.
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS full_name text;
 
 CREATE TABLE IF NOT EXISTS daily_prices (
     company             text NOT NULL REFERENCES companies(ticker),
