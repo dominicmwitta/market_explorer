@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMarketMetrics } from "@/lib/db";
+import { getMarketMetrics, marketBreadth } from "@/lib/db";
 import { formatCompactTZS, formatTZS } from "@/lib/format";
 import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const metrics = await getMarketMetrics();
+  const breadth = marketBreadth(metrics);
 
   const gainers = metrics.filter((m) => m.totalReturnPct > 0).length;
   const losers = metrics.filter((m) => m.totalReturnPct < 0).length;
@@ -29,6 +30,22 @@ export default async function HomePage() {
           <StatTile label="Gainers" value={String(gainers)} sub={`${unchanged} unchanged`} />
           <StatTile label="Losers" value={String(losers)} />
           <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold">Market Breadth (Latest Trading Day)</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          How today compares to the full period — advance/decline sentiment and price-vs-average positioning.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatTile label="Advancing" value={String(breadth.gainers)} />
+          <StatTile label="Declining" value={String(breadth.losers)} />
+          <StatTile
+            label="A/D Ratio"
+            value={breadth.advanceDeclineRatio === null ? "∞" : breadth.advanceDeclineRatio.toFixed(2)}
+          />
+          <StatTile label="Above Avg Price" value={`${breadth.pctAboveAvgPrice.toFixed(1)}%`} />
         </div>
       </section>
 

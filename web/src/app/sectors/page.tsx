@@ -2,6 +2,9 @@ import { getMarketMetrics } from "@/lib/db";
 import { formatCompactTZS } from "@/lib/format";
 import ReturnValue from "@/components/ReturnValue";
 import SectorReturnChart from "@/components/charts/SectorReturnChart";
+import SectorTurnoverTreemapChart, {
+  type SectorTreemapDatum,
+} from "@/components/charts/SectorTurnoverTreemapChart";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,17 @@ export default async function SectorsPage() {
       totalTurnover: turnover,
     }))
     .sort((a, b) => b.avgReturnPct - a.avgReturnPct);
+
+  const bySectorCompanies = new Map<string, SectorTreemapDatum["children"]>();
+  for (const m of metrics) {
+    if (m.totalTurnover <= 0) continue;
+    const children = bySectorCompanies.get(m.sector) ?? [];
+    children.push({ name: m.company, size: m.totalTurnover, returnPct: m.totalReturnPct });
+    bySectorCompanies.set(m.sector, children);
+  }
+  const treemapData: SectorTreemapDatum[] = [...bySectorCompanies.entries()].map(
+    ([sector, children]) => ({ name: sector, children })
+  );
 
   return (
     <div className="space-y-8">
@@ -64,6 +78,13 @@ export default async function SectorsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Market Share by Turnover</h2>
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <SectorTurnoverTreemapChart data={treemapData} />
+        </div>
       </div>
     </div>
   );
