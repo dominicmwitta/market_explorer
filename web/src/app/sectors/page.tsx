@@ -3,7 +3,11 @@ import SectorsClient from "./SectorsClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function SectorsPage() {
+export default async function SectorsPage(props: PageProps<"/sectors">) {
+  const searchParams = await props.searchParams;
+  const sectorParam = searchParams.sector;
+  const initialSector = Array.isArray(sectorParam) ? sectorParam[0] : sectorParam;
+
   const tickers = await getTickers();
   const history = await getPriceHistoryForTickers(tickers.map((t) => t.ticker));
 
@@ -16,7 +20,7 @@ export default async function SectorsPage() {
         </p>
       </div>
 
-      <SectorsClient tickers={tickers} history={history} />
+      <SectorsClient tickers={tickers} history={history} initialSector={initialSector} />
     </div>
   );
 }

@@ -18,12 +18,18 @@ type TickerInfo = { ticker: string; sector: string; fullName: string };
 export default function SectorsClient({
   tickers,
   history,
+  initialSector,
 }: {
   tickers: TickerInfo[];
   history: Record<string, PricePoint[]>;
+  initialSector?: string;
 }) {
   const allTickers = useMemo(() => tickers.map((t) => t.ticker), [tickers]);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(allTickers));
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    if (!initialSector) return new Set(allTickers);
+    const matching = tickers.filter((t) => t.sector === initialSector).map((t) => t.ticker);
+    return new Set(matching.length > 0 ? matching : allTickers);
+  });
 
   const { minDate, maxDate } = useMemo(() => {
     let min = "";

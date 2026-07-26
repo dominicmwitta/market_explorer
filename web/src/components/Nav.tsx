@@ -4,18 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Market" },
-  { href: "/performance", label: "Performance" },
-  { href: "/returns", label: "Returns" },
-  { href: "/volume", label: "Volume" },
-  { href: "/sectors", label: "Sectors" },
-  { href: "/compare", label: "Compare" },
-  { href: "/technical", label: "Technical" },
-  { href: "/price-trends", label: "Price Trends" },
-  { href: "/order-book", label: "Order Book" },
-  { href: "/order-book/trends", label: "OB Trends" },
-  { href: "/backtest", label: "Backtest" },
-  { href: "/liquidity-index", label: "Liquidity Index" },
+  { href: "/", label: "Market", icon: "🏠" },
+  { href: "/performance", label: "Performance", icon: "🏆" },
+  { href: "/returns", label: "Returns", icon: "💹" },
+  { href: "/volume", label: "Volume", icon: "📶" },
+  { href: "/sectors", label: "Sectors", icon: "🏢" },
+  { href: "/compare", label: "Compare", icon: "⚖️" },
+  { href: "/technical", label: "Technical", icon: "📉" },
+  { href: "/price-trends", label: "Price Trends", icon: "📈" },
+  { href: "/order-book", label: "Order Book", icon: "📖" },
+  { href: "/order-book/trends", label: "OB Trends", icon: "🔀" },
+  { href: "/backtest", label: "Backtest", icon: "🔁" },
+  { href: "/liquidity-index", label: "Liquidity Index", icon: "💧" },
 ];
 
 export default function Nav() {
@@ -45,7 +45,7 @@ export default function Nav() {
                     : "rounded-full px-3 py-1 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
                 }
               >
-                {link.label}
+                <span aria-hidden="true">{link.icon}</span> {link.label}
               </Link>
             );
           })}
