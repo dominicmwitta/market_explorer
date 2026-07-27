@@ -17,23 +17,6 @@ import type { PricePoint } from "@/lib/db";
 
 type TickerInfo = { ticker: string; sector: string; fullName: string };
 
-const SECTOR_ICONS: Record<string, string> = {
-  Aviation: "✈️",
-  Banking: "🏦",
-  Energy: "⚡",
-  ETFs: "📦",
-  Investment: "💼",
-  Manufacturing: "🏭",
-  Media: "📰",
-  Retail: "🛒",
-  Telecommunications: "📡",
-  Agriculture: "🌾",
-};
-
-// Fixed order (alphabetical) so each sector always gets the same accent
-// color regardless of stock counts shifting — identity, not ranking.
-const SECTOR_ACCENTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
-
 export default function HomeClient({
   tickers,
   historyByTicker,
@@ -76,12 +59,6 @@ export default function HomeClient({
   const mostLiquid = new Set(
     [...metrics].sort((a, b) => b.totalTurnover - a.totalTurnover).slice(0, 10).map((m) => m.company)
   );
-
-  const sectorCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const t of tickers) counts.set(t.sector, (counts.get(t.sector) ?? 0) + 1);
-    return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [tickers]);
 
   return (
     <div className="space-y-10">
@@ -132,20 +109,6 @@ export default function HomeClient({
             </div>
           </section>
 
-          <section>
-            <h2 className="text-lg font-semibold">Browse by Sector</h2>
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {sectorCounts.map(([sector, count], i) => (
-                <SectorTile
-                  key={sector}
-                  sector={sector}
-                  count={count}
-                  accent={SECTOR_ACCENTS[i % SECTOR_ACCENTS.length]}
-                />
-              ))}
-            </div>
-          </section>
-
           <section className="grid gap-8 lg:grid-cols-2">
             <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} />
             <MoversTable title="Top Losers" rows={topLosers} mostLiquid={mostLiquid} />
@@ -153,30 +116,6 @@ export default function HomeClient({
         </>
       )}
     </div>
-  );
-}
-
-function SectorTile({
-  sector,
-  count,
-  accent,
-}: {
-  sector: string;
-  count: number;
-  accent: number;
-}) {
-  return (
-    <Link
-      href={`/sectors?sector=${encodeURIComponent(sector)}`}
-      className="rounded-lg border border-border bg-surface p-4 text-center transition-transform hover:-translate-y-0.5 hover:shadow-sm"
-      style={{ borderTop: `3px solid var(--series-${accent})` }}
-    >
-      <div className="text-2xl">{SECTOR_ICONS[sector] ?? "🏷️"}</div>
-      <div className="mt-2 text-sm font-medium text-text-primary">{sector}</div>
-      <div className="text-xs text-text-muted">
-        {count} {count === 1 ? "stock" : "stocks"}
-      </div>
-    </Link>
   );
 }
 
