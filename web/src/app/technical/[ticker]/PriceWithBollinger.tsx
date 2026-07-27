@@ -32,6 +32,18 @@ export default function PriceWithBollinger({
           Show Bollinger Bands
         </label>
       </div>
+      <p className="mb-3 text-sm text-text-secondary">
+        Green candles mean the price closed higher than it opened that day; red means it closed
+        lower. SMA 20 and SMA 50 smooth the closing price over the last 20 and 50 trading days to
+        show the underlying trend — price holding above both lines suggests an uptrend, below
+        both suggests a downtrend. SMA 20 crossing above SMA 50 (a &quot;golden cross&quot;) is
+        often read as bullish; crossing below (a &quot;death cross&quot;) is often read as
+        bearish. Bollinger Bands widen and narrow with recent volatility: price pushing against
+        the upper band can mean it&apos;s stretched above its recent range (risk of a pullback),
+        while pushing against the lower band can mean it&apos;s stretched below its recent range
+        (potential for a bounce). None of these guarantee what happens next — they describe recent
+        behavior, not predict future direction.
+      </p>
       <div className="rounded-lg border border-border bg-surface p-4">
         <CandlestickChart data={data} height={360}>
           {showBollinger && (

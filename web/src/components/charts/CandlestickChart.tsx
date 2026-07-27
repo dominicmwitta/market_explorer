@@ -3,6 +3,7 @@
 import {
   Bar,
   ComposedChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -110,8 +111,9 @@ export default function CandlestickChart({
             );
           }}
         />
-        <Bar dataKey="range" shape={Candle} isAnimationActive={false} />
+        <Bar dataKey="range" shape={Candle} isAnimationActive={false} legendType="none" />
         {children}
+        <Legend wrapperStyle={{ fontSize: 12 }} />
       </ComposedChart>
     </ResponsiveContainer>
   );

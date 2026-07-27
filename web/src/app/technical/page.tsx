@@ -11,7 +11,9 @@ export default async function TechnicalIndexPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Technical Analysis</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Select a stock to view SMA/Bollinger overlays, RSI, and MACD.
+          Select a stock to view its price trend against moving averages and Bollinger Bands,
+          plus the RSI and MACD momentum indicators — each chart explains what it measures and
+          how to read it.
         </p>
       </div>
 

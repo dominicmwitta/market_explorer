@@ -4,6 +4,7 @@ import {
   Bar,
   Cell,
   ComposedChart,
+  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -41,7 +42,7 @@ export default function MacdChart({ data }: { data: Point[] }) {
             name,
           ]}
         />
-        <Bar dataKey="histogram" isAnimationActive={false} name="Histogram">
+        <Bar dataKey="histogram" isAnimationActive={false} name="Histogram (momentum)">
           {data.map((d, i) => (
             <Cell
               key={i}
@@ -56,7 +57,7 @@ export default function MacdChart({ data }: { data: Point[] }) {
           strokeWidth={1.5}
           dot={false}
           isAnimationActive={false}
-          name="MACD"
+          name="MACD line"
         />
         <Line
           type="monotone"
@@ -65,8 +66,9 @@ export default function MacdChart({ data }: { data: Point[] }) {
           strokeWidth={1.5}
           dot={false}
           isAnimationActive={false}
-          name="Signal"
+          name="Signal line"
         />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
       </ComposedChart>
     </ResponsiveContainer>
   );
