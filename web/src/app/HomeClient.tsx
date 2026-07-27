@@ -195,7 +195,7 @@ function MoversTable({
   mostLiquid: Set<string>;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <h2 className="mb-3 text-lg font-semibold">{title}</h2>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
