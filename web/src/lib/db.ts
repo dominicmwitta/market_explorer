@@ -305,6 +305,14 @@ export async function getTickers(): Promise<{ ticker: string; sector: string; fu
   }));
 }
 
+/** Distinct sector names among active companies, for nav/browse purposes. */
+export async function getSectors(): Promise<string[]> {
+  const rows = await sql`
+    SELECT DISTINCT sector FROM companies WHERE active ORDER BY sector
+  `;
+  return rows.map((r) => r.sector as string);
+}
+
 export type DailyTurnoverPoint = { date: string; totalTurnover: number };
 
 /** Sum of turnover across all active stocks per calendar date, full history. */

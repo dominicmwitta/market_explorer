@@ -85,17 +85,12 @@ export default function HomeClient({
 
   return (
     <div className="space-y-10">
-      <section
-        className="-mt-8 rounded-b-2xl px-6 py-8 sm:-mt-8 sm:px-8"
-        style={{ background: "var(--brand-gradient)", marginLeft: "-1.5rem", marginRight: "-1.5rem" }}
-      >
-        <div className="mx-auto max-w-6xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Market Summary</h1>
-          <p className="mt-1 text-sm text-white/80">
-            Across {metrics.length} active DSE-listed stocks, {range.start} to {range.end}.
-          </p>
-        </div>
-      </section>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Market Summary</h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          Across {metrics.length} active DSE-listed stocks, {range.start} to {range.end}.
+        </p>
+      </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
