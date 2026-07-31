@@ -104,25 +104,46 @@ body {
 .range-slider-thumb::-moz-range-track {
   background: transparent;
 }
-.range-slider-thumb::-webkit-slider-thumb {
+/* Triangular thumbs distinguish the two handles by shape, not just position:
+   the start handle points up (apex on top), the end handle points down
+   (apex on bottom) — so which is which is obvious even when they're close
+   together or overlapping. */
+.range-slider-thumb--start::-webkit-slider-thumb,
+.range-slider-thumb--end::-webkit-slider-thumb {
   pointer-events: auto;
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: var(--surface-1);
-  border: 2px solid var(--series-1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
   cursor: pointer;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
-.range-slider-thumb::-moz-range-thumb {
+.range-slider-thumb--start::-moz-range-thumb,
+.range-slider-thumb--end::-moz-range-thumb {
   pointer-events: auto;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: var(--surface-1);
-  border: 2px solid var(--series-1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  background: transparent;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
   cursor: pointer;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
+}
+
+.range-slider-thumb--start::-webkit-slider-thumb {
+  border-bottom: 14px solid var(--series-1);
+}
+.range-slider-thumb--start::-moz-range-thumb {
+  border-bottom: 14px solid var(--series-1);
+}
+
+.range-slider-thumb--end::-webkit-slider-thumb {
+  border-top: 14px solid var(--series-1);
+}
+.range-slider-thumb--end::-moz-range-thumb {
+  border-top: 14px solid var(--series-1);
 }

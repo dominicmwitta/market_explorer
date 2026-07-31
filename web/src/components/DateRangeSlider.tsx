@@ -51,7 +51,7 @@ export default function DateRangeSlider({
             const i = Math.min(Number(e.target.value), endIndex);
             onChange({ start: dates[i], end: value.end });
           }}
-          className="range-slider-thumb pointer-events-none absolute inset-x-0 h-5 w-full"
+          className="range-slider-thumb range-slider-thumb--start pointer-events-none absolute inset-x-0 h-5 w-full"
           aria-label="Range start date"
         />
         <input
@@ -63,7 +63,7 @@ export default function DateRangeSlider({
             const i = Math.max(Number(e.target.value), startIndex);
             onChange({ start: value.start, end: dates[i] });
           }}
-          className="range-slider-thumb pointer-events-none absolute inset-x-0 h-5 w-full"
+          className="range-slider-thumb range-slider-thumb--end pointer-events-none absolute inset-x-0 h-5 w-full"
           aria-label="Range end date"
         />
       </div>
