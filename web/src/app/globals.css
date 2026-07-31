@@ -134,16 +134,25 @@ body {
   filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
 
+/* Browsers vertically center the thumb box on the track by default, which
+   would straddle the apex across the line. Shifting by half the triangle's
+   height moves the whole shape to one side so only the apex point sits on
+   the line — hanging below for the up-pointing start handle, hanging above
+   for the down-pointing end handle. */
 .range-slider-thumb--start::-webkit-slider-thumb {
   border-bottom: 14px solid var(--series-1);
+  transform: translateY(7px);
 }
 .range-slider-thumb--start::-moz-range-thumb {
   border-bottom: 14px solid var(--series-1);
+  transform: translateY(7px);
 }
 
 .range-slider-thumb--end::-webkit-slider-thumb {
   border-top: 14px solid var(--series-1);
+  transform: translateY(-7px);
 }
 .range-slider-thumb--end::-moz-range-thumb {
   border-top: 14px solid var(--series-1);
+  transform: translateY(-7px);
 }
