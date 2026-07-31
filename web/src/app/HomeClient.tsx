@@ -14,7 +14,11 @@ import ReturnValue from "@/components/ReturnValue";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
 import DateRangeSlider from "@/components/DateRangeSlider";
 import TagBadge from "@/components/TagBadge";
+import TickerTile, { type TickerTileData } from "@/components/TickerTile";
 import type { PricePoint } from "@/lib/db";
+
+const WATCH_TILE_COUNT = 3;
+const SPARKLINE_POINTS = 30;
 
 type TickerInfo = { ticker: string; sector: string; fullName: string };
 
@@ -65,25 +69,70 @@ export default function HomeClient({
     [...metrics].sort((a, b) => b.totalTurnover - a.totalTurnover).slice(0, 10).map((m) => m.company)
   );
 
+  // Independent of the selected `range` above — a stable "most liquid, right
+  // now" watchlist rather than something that goes quiet when the period is
+  // narrowed to a single day. Ranked by full-history turnover.
+  const watchTiles: TickerTileData[] = useMemo(() => {
+    return tickers
+      .map((t) => {
+        const points = historyByTicker[t.ticker] ?? [];
+        const totalTurnover = points.reduce((sum, p) => sum + p.turnover, 0);
+        return { ticker: t.ticker, points, totalTurnover };
+      })
+      .filter((t) => t.points.length > 0)
+      .sort((a, b) => b.totalTurnover - a.totalTurnover)
+      .slice(0, WATCH_TILE_COUNT)
+      .map(({ ticker, points }) => {
+        const price = points[points.length - 1].closingPrice;
+        const prevPrice = points.length > 1 ? points[points.length - 2].closingPrice : price;
+        const changePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+        return {
+          ticker,
+          price,
+          changePct,
+          sparkline: points
+            .slice(-SPARKLINE_POINTS)
+            .map((p) => ({ date: p.date, value: p.closingPrice })),
+        };
+      });
+  }, [tickers, historyByTicker]);
+
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Market Summary</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Across {metrics.length} active DSE-listed stocks. Showing change from{" "}
-          <strong className="font-medium text-text-primary">{formatDateLabel(range.start)}</strong> to{" "}
-          <strong className="font-medium text-text-primary">{formatDateLabel(range.end)}</strong>.
-        </p>
-      </div>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex-1 space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Market Summary</h1>
+            <p className="mt-1 text-sm text-text-secondary">
+              Across {metrics.length} active DSE-listed stocks. Showing change from{" "}
+              <strong className="font-medium text-text-primary">{formatDateLabel(range.start)}</strong>{" "}
+              to <strong className="font-medium text-text-primary">{formatDateLabel(range.end)}</strong>.
+            </p>
+          </div>
 
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <PeriodFilterBar
-          minDate={minDate}
-          maxDate={maxDate}
-          value={range}
-          onChange={setRange}
-          tradingDates={tradingDates}
-        />
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <PeriodFilterBar
+              minDate={minDate}
+              maxDate={maxDate}
+              value={range}
+              onChange={setRange}
+              tradingDates={tradingDates}
+            />
+          </div>
+        </div>
+
+        {watchTiles.length > 0 && (
+          <div className="w-full lg:w-auto">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+              Most Liquid
+            </div>
+            <div className="grid grid-cols-3 gap-3 sm:w-[420px]">
+              {watchTiles.map((t) => (
+                <TickerTile key={t.ticker} {...t} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {metrics.length === 0 ? (
