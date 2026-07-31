@@ -62,6 +62,14 @@ export default function ReturnVolatilityScatterChart({ data }: { data: Datum[] }
           axisLine={{ stroke: "var(--baseline)" }}
           tickLine={false}
           tickFormatter={(v: number) => `${v}%`}
+          label={{
+            value: "Volatility % (day-to-day price swing)",
+            position: "insideBottom",
+            offset: -4,
+            fill: "var(--text-muted)",
+            fontSize: 11,
+          }}
+          height={40}
         />
         <YAxis
           type="number"
@@ -71,6 +79,13 @@ export default function ReturnVolatilityScatterChart({ data }: { data: Datum[] }
           axisLine={false}
           tickLine={false}
           tickFormatter={(v: number) => `${v}%`}
+          label={{
+            value: "Return %",
+            angle: -90,
+            position: "insideLeft",
+            fill: "var(--text-muted)",
+            fontSize: 11,
+          }}
         />
         <ZAxis dataKey="totalTurnover" range={[50, 500]} />
         <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 4" />

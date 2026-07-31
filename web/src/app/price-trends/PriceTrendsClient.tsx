@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MultiLineChart from "@/components/charts/MultiLineChart";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
+import DataAsOf from "@/components/DataAsOf";
 import { formatTZS } from "@/lib/format";
 import type { PricePoint } from "@/lib/db";
 import {
@@ -136,6 +137,8 @@ export default function PriceTrendsClient({
       <div className="rounded-lg border border-border bg-surface p-4">
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
+
+      <DataAsOf date={maxDate} />
 
       <div className="space-y-6">
         <div>

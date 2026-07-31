@@ -7,6 +7,7 @@ import MultiLineChart from "@/components/charts/MultiLineChart";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
 import StockFilterBar from "@/components/StockFilterBar";
 import type { CompanyPressurePoint, LiquidBidOfferSeries } from "@/lib/db";
+import DataAsOf from "@/components/DataAsOf";
 
 export default function OrderBookTrendsClient({
   pressureByCompany,
@@ -78,6 +79,8 @@ export default function OrderBookTrendsClient({
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
 
+      <DataAsOf date={maxDate} />
+
       <StockFilterBar
         options={tickers}
         selected={selected}
@@ -99,8 +102,9 @@ export default function OrderBookTrendsClient({
       <section>
         <h2 className="mb-1 text-lg font-semibold">Bid/Offer Ratio Trend — Top 10 Most Liquid Stocks</h2>
         <p className="mb-3 text-sm text-text-secondary">
-          Liquidity ranked by total turnover, limited to selected stocks. Gaps indicate no outstanding
-          offers that day (an infinite ratio).
+          Above the dashed line (1.0) means outstanding bids exceed offers — buy-side pressure;
+          below means the opposite. Liquidity ranked by total turnover, limited to selected
+          stocks. Gaps indicate no outstanding offers that day (an infinite ratio).
         </p>
         <div className="rounded-lg border border-border bg-surface p-4">
           {liquidTickers.length === 0 ? (

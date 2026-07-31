@@ -9,6 +9,7 @@ import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PortfolioValueChart from "@/components/charts/PortfolioValueChart";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
+import DataAsOf from "@/components/DataAsOf";
 
 export default function BacktestClient({
   minDate,
@@ -74,6 +75,8 @@ export default function BacktestClient({
         </div>
       </div>
 
+      <DataAsOf date={maxDate} />
+
       {error && (
         <div className="rounded-lg border border-border bg-surface p-4 text-sm text-status-critical">
           Backtest failed: {error}
@@ -82,10 +85,23 @@ export default function BacktestClient({
 
       {result && (
         <div className="space-y-8">
+          <h2 className="text-lg font-semibold">
+            Results — Top {result.topN} Momentum Strategy
+          </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <StatTile label="Total Return" value={<ReturnValue value={result.totalReturnPct} />} />
-            <StatTile label="Win Rate" value={`${result.winRatePct.toFixed(1)}%`} />
-            <StatTile label="Max Drawdown" value={formatPct(result.maxDrawdownPct, 2)} />
+            <StatTile
+              label="Win Rate"
+              value={`${result.winRatePct.toFixed(1)}%`}
+              sub="Share of days the portfolio gained"
+              accent={result.winRatePct >= 50 ? "good" : "critical"}
+            />
+            <StatTile
+              label="Max Drawdown"
+              value={formatPct(result.maxDrawdownPct, 2)}
+              sub="Worst peak-to-trough drop"
+              accent="critical"
+            />
             <StatTile label="Trading Days" value={String(result.tradingDays)} />
             <StatTile label="Best Day" value={<ReturnValue value={result.bestDayPct} />} />
             <StatTile label="Worst Day" value={<ReturnValue value={result.worstDayPct} />} />

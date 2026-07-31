@@ -8,6 +8,7 @@ import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
 import LiquidityIndexChart from "@/components/charts/LiquidityIndexChart";
+import DataAsOf from "@/components/DataAsOf";
 
 type ClosingPoint = { date: string; closingPrice: number; turnover: number };
 
@@ -95,6 +96,8 @@ export default function LiquidityIndexClient({
           />
         </div>
       </div>
+
+      <DataAsOf date={maxDate} />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <StatTile label="Index Return" value={<ReturnValue value={indexReturnPct} />} />

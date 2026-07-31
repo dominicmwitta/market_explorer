@@ -19,3 +19,14 @@ export function formatRatio(value: number | null): string {
   if (value === null) return "∞"; // infinity — bids present, zero offers
   return value.toFixed(2);
 }
+
+/** "2026-07-31" -> "Jul 31, 2026". */
+export function formatDateLabel(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}

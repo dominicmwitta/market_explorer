@@ -9,6 +9,7 @@ import MomentumChart from "@/components/charts/MomentumChart";
 import { computeMetricsForRange } from "@/lib/metrics";
 import type { DateRange } from "@/lib/timeseries";
 import type { PricePoint } from "@/lib/db";
+import DataAsOf from "@/components/DataAsOf";
 
 const BIN_COUNT = 20;
 
@@ -115,6 +116,8 @@ export default function ReturnsClient({
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
 
+      <DataAsOf date={maxDate} />
+
       {filtered.length === 0 ? (
         <p className="text-sm text-text-secondary">Select at least one stock to see returns analysis.</p>
       ) : (
@@ -125,7 +128,13 @@ export default function ReturnsClient({
               <ReturnHistogramChart data={bins} />
             </div>
             <div className="rounded-lg border border-border bg-surface p-4">
-              <h2 className="mb-3 text-lg font-semibold">Return vs Volatility</h2>
+              <h2 className="mb-1 text-lg font-semibold">Return vs Volatility</h2>
+              <p className="mb-3 text-xs text-text-secondary">
+                Volatility (x-axis) is how much the price swung day to day — bumpier, not
+                automatically worse. The upper-left is generally the most attractive spot: solid
+                return for relatively low volatility. Dot size reflects trading activity
+                (turnover).
+              </p>
               <ReturnVolatilityScatterChart data={scatterData} />
             </div>
           </div>

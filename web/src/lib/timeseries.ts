@@ -14,6 +14,11 @@ export function inDateRange(date: string, range: DateRange): boolean {
   return date >= range.start && date <= range.end;
 }
 
+/** Distinct dates, ascending — the actual trading days present in the data (no weekends/holidays). */
+export function uniqueSortedDates(dates: string[]): string[] {
+  return [...new Set(dates)].sort();
+}
+
 /** One row per date, one column per ticker — the shape Recharts needs for multi-line charts. */
 export function pivotByDate<V extends number | string | null>(
   seriesByTicker: Record<string, SeriesPoint<V>[]>,

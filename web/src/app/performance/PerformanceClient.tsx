@@ -8,6 +8,7 @@ import SharpeRatioChart from "@/components/charts/SharpeRatioChart";
 import { computeMetricsForRange } from "@/lib/metrics";
 import type { DateRange } from "@/lib/timeseries";
 import type { PricePoint } from "@/lib/db";
+import DataAsOf from "@/components/DataAsOf";
 
 type TickerMeta = { ticker: string; sector: string; fullName: string };
 
@@ -88,6 +89,8 @@ export default function PerformanceClient({
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
 
+      <DataAsOf date={maxDate} />
+
       {filtered.length === 0 ? (
         <p className="text-sm text-text-secondary">Select at least one stock to see performance rankings.</p>
       ) : (
@@ -114,8 +117,11 @@ export default function PerformanceClient({
           <div className="rounded-lg border border-border bg-surface p-4">
             <h2 className="mb-3 text-lg font-semibold">Risk-Adjusted Performance (Sharpe Ratio)</h2>
             <p className="mb-3 text-sm text-text-secondary">
-              Top 15 stocks by Sharpe ratio among those with non-zero volatility, colored by total
-              return.
+              Sharpe ratio measures return earned per unit of volatility (day-to-day price
+              swings) taken on — a higher bar means a smoother ride to that return, not
+              necessarily a bigger one. It&apos;s one useful measure of risk, not the whole
+              picture. Showing the top 15 stocks by Sharpe ratio among those with non-zero
+              volatility; bars are green where total return was positive and red where negative.
             </p>
             <SharpeRatioChart data={tradeable} fullNameByTicker={fullNameByTicker} />
           </div>

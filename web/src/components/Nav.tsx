@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type Item = { href: string; label: string; icon: string };
+type Item = { href: string; label: string; icon: string; advanced?: boolean };
 type Group = { label: string; icon: string; href?: string; basePath?: string; items?: Item[] };
 
 // Grouped into a handful of dropdown categories (goal.com-style mega-menu
@@ -53,8 +53,8 @@ function buildGroups(sectors: string[]): Group[] {
       label: "Tools",
       icon: "🧰",
       items: [
-        { href: "/backtest", label: "Backtest", icon: "🔁" },
-        { href: "/liquidity-index", label: "Liquidity Index", icon: "💧" },
+        { href: "/backtest", label: "Backtest", icon: "🔁", advanced: true },
+        { href: "/liquidity-index", label: "Liquidity Index", icon: "💧", advanced: true },
       ],
     },
   ];
@@ -117,11 +117,18 @@ export default function Nav({ sectors }: { sectors: string[] }) {
                         href={it.href}
                         className={
                           itActive
-                            ? "block rounded-md bg-page px-3 py-2 text-sm font-medium text-text-primary"
-                            : "block rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-page hover:text-text-primary"
+                            ? "flex items-center justify-between gap-2 rounded-md bg-page px-3 py-2 text-sm font-medium text-text-primary"
+                            : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm text-text-secondary hover:bg-page hover:text-text-primary"
                         }
                       >
-                        <span aria-hidden="true">{it.icon}</span> {it.label}
+                        <span>
+                          <span aria-hidden="true">{it.icon}</span> {it.label}
+                        </span>
+                        {it.advanced && (
+                          <span className="rounded-full bg-text-muted/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-text-muted">
+                            Advanced
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
@@ -170,11 +177,18 @@ export default function Nav({ sectors }: { sectors: string[] }) {
                       onClick={() => setMobileOpen(false)}
                       className={
                         isItemActive(it.href, pathname)
-                          ? "block rounded-md px-4 py-1.5 text-sm font-medium text-text-primary"
-                          : "block rounded-md px-4 py-1.5 text-sm text-text-secondary"
+                          ? "flex items-center justify-between gap-2 rounded-md px-4 py-1.5 text-sm font-medium text-text-primary"
+                          : "flex items-center justify-between gap-2 rounded-md px-4 py-1.5 text-sm text-text-secondary"
                       }
                     >
-                      <span aria-hidden="true">{it.icon}</span> {it.label}
+                      <span>
+                        <span aria-hidden="true">{it.icon}</span> {it.label}
+                      </span>
+                      {it.advanced && (
+                        <span className="rounded-full bg-text-muted/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-text-muted">
+                          Advanced
+                        </span>
+                      )}
                     </Link>
                   ))}
                 </>

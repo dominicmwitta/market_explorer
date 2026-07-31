@@ -8,6 +8,7 @@ import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
 import CandlestickChart from "@/components/charts/CandlestickChart";
+import DataAsOf from "@/components/DataAsOf";
 
 type Ticker = { ticker: string; sector: string };
 
@@ -16,11 +17,35 @@ const COMPARISON_METRICS: {
   label: string;
   suffix: string;
   isReturn?: boolean;
+  description: string;
+  colorBySign?: boolean;
 }[] = [
-  { key: "totalReturnPct", label: "Return %", suffix: "%", isReturn: true },
-  { key: "volatilityPct", label: "Volatility %", suffix: "%" },
-  { key: "sharpeRatio", label: "Sharpe Ratio", suffix: "" },
-  { key: "liquidityPct", label: "Liquidity %", suffix: "%" },
+  {
+    key: "totalReturnPct",
+    label: "Return %",
+    suffix: "%",
+    isReturn: true,
+    description: "Total price change over the selected period.",
+  },
+  {
+    key: "volatilityPct",
+    label: "Volatility %",
+    suffix: "%",
+    description: "How much the price swung day to day — higher means bumpier, not necessarily worse.",
+  },
+  {
+    key: "sharpeRatio",
+    label: "Sharpe Ratio",
+    suffix: "",
+    colorBySign: true,
+    description: "Return earned per unit of volatility taken on. Higher is generally better, but it's only one measure of risk.",
+  },
+  {
+    key: "liquidityPct",
+    label: "Liquidity %",
+    suffix: "%",
+    description: "Share of days in the period this stock actually traded — not how easily you could sell right now.",
+  },
 ];
 
 const selectClasses =
@@ -142,9 +167,11 @@ export default function CompareClient({ tickers }: { tickers: Ticker[] }) {
         </div>
       )}
 
+      <DataAsOf date={maxDate} />
+
       {m1 && m2 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {COMPARISON_METRICS.map(({ key, label, suffix, isReturn }) => (
+          {COMPARISON_METRICS.map(({ key, label, suffix, isReturn, description, colorBySign }) => (
             <div key={label} className="flex flex-col gap-3">
               <StatTile
                 label={`${stock1} — ${label}`}
@@ -155,6 +182,8 @@ export default function CompareClient({ tickers }: { tickers: Ticker[] }) {
                     `${(m1[key] as number).toFixed(2)}${suffix}`
                   )
                 }
+                sub={description}
+                accent={colorBySign ? ((m1[key] as number) >= 0 ? "good" : "critical") : undefined}
               />
               <StatTile
                 label={`${stock2} — ${label}`}
@@ -165,6 +194,8 @@ export default function CompareClient({ tickers }: { tickers: Ticker[] }) {
                     `${(m2[key] as number).toFixed(2)}${suffix}`
                   )
                 }
+                sub={description}
+                accent={colorBySign ? ((m2[key] as number) >= 0 ? "good" : "critical") : undefined}
               />
             </div>
           ))}

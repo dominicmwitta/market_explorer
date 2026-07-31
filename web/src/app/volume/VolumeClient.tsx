@@ -9,6 +9,7 @@ import DailyTurnoverAreaChart from "@/components/charts/DailyTurnoverAreaChart";
 import { computeMetricsForRange } from "@/lib/metrics";
 import { inDateRange, type DateRange } from "@/lib/timeseries";
 import type { PricePoint } from "@/lib/db";
+import DataAsOf from "@/components/DataAsOf";
 
 type TickerMeta = { ticker: string; sector: string; fullName: string };
 
@@ -101,6 +102,8 @@ export default function VolumeClient({
       <div className="rounded-lg border border-border bg-surface p-4">
         <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
       </div>
+
+      <DataAsOf date={maxDate} />
 
       {filtered.length === 0 ? (
         <p className="text-sm text-text-secondary">Select at least one stock to see volume analysis.</p>

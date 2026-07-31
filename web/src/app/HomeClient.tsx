@@ -7,8 +7,8 @@ import {
   computeMetricsForRange,
   type CompanyMetricsForRange,
 } from "@/lib/metrics";
-import type { DateRange } from "@/lib/timeseries";
-import { formatCompactTZS, formatTZS } from "@/lib/format";
+import { uniqueSortedDates, type DateRange } from "@/lib/timeseries";
+import { formatCompactTZS, formatDateLabel, formatTZS } from "@/lib/format";
 import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
@@ -30,7 +30,11 @@ export default function HomeClient({
   );
   const minDate = allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : "";
   const maxDate = allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : "";
-  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
+  const tradingDates = useMemo(() => uniqueSortedDates(allDates), [allDates]);
+  // Default to the latest one-day change (previous trading day -> latest), not the full history.
+  const defaultStart =
+    tradingDates.length >= 2 ? tradingDates[tradingDates.length - 2] : minDate;
+  const [range, setRange] = useState<DateRange>({ start: defaultStart, end: maxDate });
 
   const metrics: CompanyMetricsForRange[] = useMemo(
     () => computeMetricsForRange(tickers, historyByTicker, range),
@@ -65,12 +69,20 @@ export default function HomeClient({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Market Summary</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Across {metrics.length} active DSE-listed stocks, {range.start} to {range.end}.
+          Across {metrics.length} active DSE-listed stocks. Showing change from{" "}
+          <strong className="font-medium text-text-primary">{formatDateLabel(range.start)}</strong> to{" "}
+          <strong className="font-medium text-text-primary">{formatDateLabel(range.end)}</strong>.
         </p>
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
-        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+        <PeriodFilterBar
+          minDate={minDate}
+          maxDate={maxDate}
+          value={range}
+          onChange={setRange}
+          tradingDates={tradingDates}
+        />
       </div>
 
       {metrics.length === 0 ? (
@@ -110,8 +122,8 @@ export default function HomeClient({
           </section>
 
           <section className="grid gap-8 lg:grid-cols-2">
-            <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} />
-            <MoversTable title="Top Losers" rows={topLosers} mostLiquid={mostLiquid} />
+            <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} range={range} />
+            <MoversTable title="Top Losers" rows={topLosers} mostLiquid={mostLiquid} range={range} />
           </section>
         </>
       )}
@@ -123,14 +135,19 @@ function MoversTable({
   title,
   rows,
   mostLiquid,
+  range,
 }: {
   title: string;
   rows: CompanyMetricsForRange[];
   mostLiquid: Set<string>;
+  range: DateRange;
 }) {
   return (
     <div className="min-w-0">
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+      <h2 className="mb-0.5 text-lg font-semibold">{title}</h2>
+      <p className="mb-3 text-xs text-text-secondary">
+        {formatDateLabel(range.start)} → {formatDateLabel(range.end)}
+      </p>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>
