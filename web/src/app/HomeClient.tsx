@@ -12,6 +12,7 @@ import { formatCompactTZS, formatDateLabel, formatTZS } from "@/lib/format";
 import StatTile from "@/components/StatTile";
 import ReturnValue from "@/components/ReturnValue";
 import PeriodFilterBar from "@/components/PeriodFilterBar";
+import DateRangeSlider from "@/components/DateRangeSlider";
 import TagBadge from "@/components/TagBadge";
 import type { PricePoint } from "@/lib/db";
 
@@ -120,6 +121,15 @@ export default function HomeClient({
               <StatTile label="Above Avg Price" value={`${breadth.pctAboveAvgPrice.toFixed(1)}%`} accent={3} />
             </div>
           </section>
+
+          {tradingDates.length > 1 && (
+            <div className="rounded-lg border border-border bg-surface p-4">
+              <div className="mb-2 text-sm font-medium text-text-secondary">
+                Drag to change the period for the tables below
+              </div>
+              <DateRangeSlider dates={tradingDates} value={range} onChange={setRange} />
+            </div>
+          )}
 
           <section className="grid gap-8 lg:grid-cols-2">
             <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} range={range} />
