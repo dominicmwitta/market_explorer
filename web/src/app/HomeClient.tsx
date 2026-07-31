@@ -21,7 +21,6 @@ import type { PricePoint } from "@/lib/db";
 
 const STRIP_TICKER_COUNT = 10;
 const WATCH_TILE_COUNT = 3;
-const SPARKLINE_POINTS = 30;
 
 /** Latest close and 1-day change from an ascending, oldest-to-newest price history. */
 function computeTickerSnapshot(points: PricePoint[]): { price: number; changePct: number } {
@@ -103,14 +102,32 @@ export default function HomeClient({
     [rankedByLiquidity]
   );
 
+  // All-time gain from first to latest available close — independent of the
+  // selected `range` above, same as the liquidity ranking, so the watchlist
+  // doesn't go quiet when the period is narrowed to a single day.
+  const rankedByAllTimeReturn = useMemo(() => {
+    return tickers
+      .map((t) => {
+        const points = historyByTicker[t.ticker] ?? [];
+        if (points.length === 0) return null;
+        const first = points[0].closingPrice;
+        const last = points[points.length - 1].closingPrice;
+        const allTimeReturnPct = first > 0 ? ((last - first) / first) * 100 : 0;
+        return { ticker: t.ticker, points, allTimeReturnPct };
+      })
+      .filter((t): t is { ticker: string; points: PricePoint[]; allTimeReturnPct: number } => t !== null)
+      .sort((a, b) => b.allTimeReturnPct - a.allTimeReturnPct);
+  }, [tickers, historyByTicker]);
+
   const watchTiles: TickerTileData[] = useMemo(
     () =>
-      rankedByLiquidity.slice(0, WATCH_TILE_COUNT).map(({ ticker, points }) => ({
+      rankedByAllTimeReturn.slice(0, WATCH_TILE_COUNT).map(({ ticker, points, allTimeReturnPct }) => ({
         ticker,
-        ...computeTickerSnapshot(points),
-        sparkline: points.slice(-SPARKLINE_POINTS).map((p) => ({ date: p.date, value: p.closingPrice })),
+        price: points[points.length - 1].closingPrice,
+        changePct: allTimeReturnPct,
+        sparkline: points.map((p) => ({ date: p.date, value: p.closingPrice })),
       })),
-    [rankedByLiquidity]
+    [rankedByAllTimeReturn]
   );
 
   return (
@@ -140,7 +157,7 @@ export default function HomeClient({
         </div>
 
         {watchTiles.length > 0 && (
-          <Block eyebrow="Watchlist" title="Most Liquid">
+          <Block eyebrow="Watchlist" title="All-Time Top Gainers">
             <div className="grid grid-cols-3 gap-3 sm:w-[380px]">
               {watchTiles.map((t) => (
                 <TickerTile key={t.ticker} {...t} />
