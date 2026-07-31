@@ -15,10 +15,21 @@ import PeriodFilterBar from "@/components/PeriodFilterBar";
 import DateRangeSlider from "@/components/DateRangeSlider";
 import TagBadge from "@/components/TagBadge";
 import TickerTile, { type TickerTileData } from "@/components/TickerTile";
+import TickerStrip, { type TickerStripItem } from "@/components/TickerStrip";
+import Block from "@/components/Block";
 import type { PricePoint } from "@/lib/db";
 
+const STRIP_TICKER_COUNT = 10;
 const WATCH_TILE_COUNT = 3;
 const SPARKLINE_POINTS = 30;
+
+/** Latest close and 1-day change from an ascending, oldest-to-newest price history. */
+function computeTickerSnapshot(points: PricePoint[]): { price: number; changePct: number } {
+  const price = points[points.length - 1].closingPrice;
+  const prevPrice = points.length > 1 ? points[points.length - 2].closingPrice : price;
+  const changePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
+  return { price, changePct };
+}
 
 type TickerInfo = { ticker: string; sector: string; fullName: string };
 
@@ -72,7 +83,7 @@ export default function HomeClient({
   // Independent of the selected `range` above — a stable "most liquid, right
   // now" watchlist rather than something that goes quiet when the period is
   // narrowed to a single day. Ranked by full-history turnover.
-  const watchTiles: TickerTileData[] = useMemo(() => {
+  const rankedByLiquidity = useMemo(() => {
     return tickers
       .map((t) => {
         const points = historyByTicker[t.ticker] ?? [];
@@ -80,25 +91,32 @@ export default function HomeClient({
         return { ticker: t.ticker, points, totalTurnover };
       })
       .filter((t) => t.points.length > 0)
-      .sort((a, b) => b.totalTurnover - a.totalTurnover)
-      .slice(0, WATCH_TILE_COUNT)
-      .map(({ ticker, points }) => {
-        const price = points[points.length - 1].closingPrice;
-        const prevPrice = points.length > 1 ? points[points.length - 2].closingPrice : price;
-        const changePct = prevPrice > 0 ? ((price - prevPrice) / prevPrice) * 100 : 0;
-        return {
-          ticker,
-          price,
-          changePct,
-          sparkline: points
-            .slice(-SPARKLINE_POINTS)
-            .map((p) => ({ date: p.date, value: p.closingPrice })),
-        };
-      });
+      .sort((a, b) => b.totalTurnover - a.totalTurnover);
   }, [tickers, historyByTicker]);
 
+  const tickerStripItems: TickerStripItem[] = useMemo(
+    () =>
+      rankedByLiquidity.slice(0, STRIP_TICKER_COUNT).map(({ ticker, points }) => ({
+        ticker,
+        ...computeTickerSnapshot(points),
+      })),
+    [rankedByLiquidity]
+  );
+
+  const watchTiles: TickerTileData[] = useMemo(
+    () =>
+      rankedByLiquidity.slice(0, WATCH_TILE_COUNT).map(({ ticker, points }) => ({
+        ticker,
+        ...computeTickerSnapshot(points),
+        sparkline: points.slice(-SPARKLINE_POINTS).map((p) => ({ date: p.date, value: p.closingPrice })),
+      })),
+    [rankedByLiquidity]
+  );
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
+      <TickerStrip items={tickerStripItems} label="Most Liquid" />
+
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex-1 space-y-6">
           <div>
@@ -122,25 +140,22 @@ export default function HomeClient({
         </div>
 
         {watchTiles.length > 0 && (
-          <div className="w-full lg:w-auto">
-            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-              Most Liquid
-            </div>
-            <div className="grid grid-cols-3 gap-3 sm:w-[420px]">
+          <Block eyebrow="Watchlist" title="Most Liquid">
+            <div className="grid grid-cols-3 gap-3 sm:w-[380px]">
               {watchTiles.map((t) => (
                 <TickerTile key={t.ticker} {...t} />
               ))}
             </div>
-          </div>
+          </Block>
         )}
       </div>
 
       {metrics.length === 0 ? (
         <p className="text-sm text-text-secondary">No trading data in the selected period.</p>
       ) : (
-        <>
-          <section>
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="space-y-6">
+          <Block eyebrow="Overview" title="Market Snapshot">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatTile label="Total Stocks" value={String(metrics.length)} accent={1} />
               <StatTile
                 label="Gainers"
@@ -151,15 +166,14 @@ export default function HomeClient({
               <StatTile label="Losers" value={String(losers)} accent="critical" />
               <StatTile label="Total Turnover" value={formatCompactTZS(totalTurnover)} accent={7} />
             </div>
-          </section>
+          </Block>
 
-          <section>
-            <h2 className="text-lg font-semibold">Market Breadth (Period End)</h2>
-            <p className="mt-1 text-sm text-text-secondary">
-              How the last trading day in the selected period compares to the rest of it —
-              advance/decline sentiment and price-vs-average positioning.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Block
+            eyebrow="Breadth"
+            title="Market Breadth (Period End)"
+            description="How the last trading day in the selected period compares to the rest of it — advance/decline sentiment and price-vs-average positioning."
+          >
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatTile label="Advancing" value={String(breadth.gainers)} accent="good" />
               <StatTile label="Declining" value={String(breadth.losers)} accent="critical" />
               <StatTile
@@ -169,22 +183,30 @@ export default function HomeClient({
               />
               <StatTile label="Above Avg Price" value={`${breadth.pctAboveAvgPrice.toFixed(1)}%`} accent={3} />
             </div>
-          </section>
+          </Block>
 
-          {tradingDates.length > 1 && (
-            <div className="rounded-lg border border-border bg-surface p-4">
-              <div className="mb-2 text-sm font-medium text-text-secondary">
-                Drag to change the period for the tables below
+          <Block
+            eyebrow="Movers"
+            title="Top Movers"
+            description={`${formatDateLabel(range.start)} → ${formatDateLabel(range.end)}`}
+          >
+            <div className="space-y-6">
+              {tradingDates.length > 1 && (
+                <div className="border-b border-border pb-6">
+                  <div className="mb-2 text-sm font-medium text-text-secondary">
+                    Drag to change the period for the tables below
+                  </div>
+                  <DateRangeSlider dates={tradingDates} value={range} onChange={setRange} />
+                </div>
+              )}
+
+              <div className="grid gap-8 lg:grid-cols-2">
+                <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} />
+                <MoversTable title="Top Losers" rows={topLosers} mostLiquid={mostLiquid} />
               </div>
-              <DateRangeSlider dates={tradingDates} value={range} onChange={setRange} />
             </div>
-          )}
-
-          <section className="grid gap-8 lg:grid-cols-2">
-            <MoversTable title="Top Gainers" rows={topGainers} mostLiquid={mostLiquid} range={range} />
-            <MoversTable title="Top Losers" rows={topLosers} mostLiquid={mostLiquid} range={range} />
-          </section>
-        </>
+          </Block>
+        </div>
       )}
     </div>
   );
@@ -194,19 +216,14 @@ function MoversTable({
   title,
   rows,
   mostLiquid,
-  range,
 }: {
   title: string;
   rows: CompanyMetricsForRange[];
   mostLiquid: Set<string>;
-  range: DateRange;
 }) {
   return (
     <div className="min-w-0">
-      <h2 className="mb-0.5 text-lg font-semibold">{title}</h2>
-      <p className="mb-3 text-xs text-text-secondary">
-        {formatDateLabel(range.start)} → {formatDateLabel(range.end)}
-      </p>
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">{title}</h3>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>
