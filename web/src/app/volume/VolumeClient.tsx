@@ -7,9 +7,10 @@ import TopTurnoverChart from "@/components/charts/TopTurnoverChart";
 import TurnoverTreemapChart from "@/components/charts/TurnoverTreemapChart";
 import DailyTurnoverAreaChart from "@/components/charts/DailyTurnoverAreaChart";
 import { computeMetricsForRange } from "@/lib/metrics";
-import { inDateRange, type DateRange } from "@/lib/timeseries";
+import { inDateRange, uniqueSortedDates, type DateRange } from "@/lib/timeseries";
 import type { PricePoint } from "@/lib/db";
 import DataAsOf from "@/components/DataAsOf";
+import { formatDateLabel } from "@/lib/format";
 
 type TickerMeta = { ticker: string; sector: string; fullName: string };
 
@@ -23,8 +24,11 @@ export default function VolumeClient({
   const allDates = Object.values(history).flatMap((points) => points.map((p) => p.date));
   const minDate = allDates.length > 0 ? allDates.reduce((a, b) => (b < a ? b : a)) : "";
   const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => (b > a ? b : a)) : "";
+  const tradingDates = useMemo(() => uniqueSortedDates(allDates), [allDates]);
+  // Default to the latest one-day change (previous trading day -> latest), not the full history.
+  const defaultStart = tradingDates.length >= 2 ? tradingDates[tradingDates.length - 2] : minDate;
 
-  const [range, setRange] = useState<DateRange>({ start: minDate, end: maxDate });
+  const [range, setRange] = useState<DateRange>({ start: defaultStart, end: maxDate });
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(tickers.map((t) => t.ticker))
   );
@@ -100,7 +104,13 @@ export default function VolumeClient({
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
-        <PeriodFilterBar minDate={minDate} maxDate={maxDate} value={range} onChange={setRange} />
+        <PeriodFilterBar
+          minDate={minDate}
+          maxDate={maxDate}
+          value={range}
+          onChange={setRange}
+          tradingDates={tradingDates}
+        />
       </div>
 
       <DataAsOf date={maxDate} />
@@ -110,7 +120,11 @@ export default function VolumeClient({
       ) : (
         <>
           <div className="rounded-lg border border-border bg-surface p-4">
-            <h2 className="mb-3 text-lg font-semibold">Trading Volume by Stock</h2>
+            <h2 className="mb-1 text-lg font-semibold">Trading Turnover by Stock</h2>
+            <p className="mb-3 text-xs text-text-secondary">
+              Ranked by turnover — total value traded (price × shares), not share count — over
+              the selected period, {formatDateLabel(range.start)} → {formatDateLabel(range.end)}.
+            </p>
             <TopTurnoverChart data={top15} fullNameByTicker={fullNameByTicker} />
           </div>
 
