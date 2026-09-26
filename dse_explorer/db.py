@@ -13,7 +13,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 
 from dse_explorer.config import SECTOR_MAP, EXCLUDED_TICKERS, get_sector, get_full_name
 
@@ -59,7 +59,13 @@ def get_engine() -> Engine:
             "DATABASE_URL is not set. Add it to a .env file in the project "
             "root (DATABASE_URL=postgresql://...) or export it in the environment."
         )
-    return create_engine(url, pool_pre_ping=True)
+    # Pin the psycopg2 driver: upsert_* use psycopg2's execute_values on the raw
+    # connection, and SQLAlchemy 2.1 made psycopg (v3) the default for a bare
+    # postgresql:// URL, which isn't installed.
+    parsed = make_url(url)
+    if parsed.drivername in ("postgresql", "postgres"):
+        parsed = parsed.set(drivername="postgresql+psycopg2")
+    return create_engine(parsed, pool_pre_ping=True)
 
 
 def create_schema(engine: Engine) -> None:
