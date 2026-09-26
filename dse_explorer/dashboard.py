@@ -410,13 +410,13 @@ def main():
                 st.plotly_chart(fig, width="stretch", config={"responsive": True})
 
         # Month-end prices for the most liquid stocks
-        st.subheader("Month-End Prices — Top 10 Most Liquid Stocks")
+        st.subheader("Month-End Prices — Top 5 Most Liquid Stocks")
         st.caption("Liquidity ranked by total turnover over the selected date range.")
 
-        liquid_top10 = range_metrics.nlargest(10, 'Total_Turnover')['Company'].tolist()
+        liquid_top5 = range_metrics.nlargest(5, 'Total_Turnover')['Company'].tolist()
 
         liquid_df = df[
-            (df['Company'].isin(liquid_top10)) &
+            (df['Company'].isin(liquid_top5)) &
             (df['Date'] >= pd.Timestamp(date_slider[0])) &
             (df['Date'] <= pd.Timestamp(date_slider[1]))
         ].copy()
@@ -434,7 +434,7 @@ def main():
             x='Date',
             y='Closing_Price',
             color='Company',
-            category_orders={'Company': liquid_top10},
+            category_orders={'Company': liquid_top5},
             labels={'Closing_Price': 'Price (TZS)', 'Date': ''},
             markers=True
         )
@@ -446,7 +446,7 @@ def main():
         )
         price_table = (
             month_end.pivot(index='Company', columns='Month_Label', values='Closing_Price')
-            .reindex(index=liquid_top10, columns=month_order)
+            .reindex(index=liquid_top5, columns=month_order)
             .reset_index()
         )
         st.dataframe(
