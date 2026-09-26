@@ -1084,8 +1084,8 @@ def main():
             )
 
             # Most Actively Traded
-            st.markdown("## Top 10 Most Actively Traded")
-            top_turn = a.get_top_performers(m, 'Total_Turnover', 10)
+            st.markdown("## Top 5 Most Actively Traded")
+            top_turn = a.get_top_performers(m, 'Total_Turnover', 5)
             st.dataframe(
                 top_turn[['Company', 'Total_Turnover', 'Total_Return_Pct', 'Liquidity_Ratio']].rename(
                     columns={'Total_Turnover': 'Turnover (TZS)', 'Total_Return_Pct': 'Return %',

@@ -350,12 +350,12 @@ class StockAnalyzer:
 
         # Most Actively Traded
         report.append("\n" + "-" * 80)
-        report.append("TOP 10 MOST ACTIVELY TRADED (By Turnover)")
+        report.append("TOP 5 MOST ACTIVELY TRADED (By Turnover)")
         report.append("-" * 80)
         report.append(f"\n{'Rank':<5}{'Company':<12}{'Turnover':<20}{'Return %':<12}{'Liquidity':<12}")
         report.append("-" * 61)
 
-        top_turnover = self.get_top_performers(metrics, 'Total_Turnover', 10)
+        top_turnover = self.get_top_performers(metrics, 'Total_Turnover', 5)
         for i, (_, row) in enumerate(top_turnover.iterrows(), 1):
             report.append(
                 f"{i:<5}{row['Company']:<12}{row['Total_Turnover']:>16,.0f}   "
@@ -613,9 +613,9 @@ class StockAnalyzer:
         )
 
         # Most Actively Traded
-        top_turnover = self.get_top_performers(metrics, 'Total_Turnover', 10)
+        top_turnover = self.get_top_performers(metrics, 'Total_Turnover', 5)
         _ranked_table(
-            "Top 10 Most Actively Traded (By Turnover)",
+            "Top 5 Most Actively Traded (By Turnover)",
             ["Rank", "Company", "Turnover (TZS)", "Return %", "Liquidity %"],
             [
                 [i, row['Company'], f"{row['Total_Turnover']:,.0f}",
