@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1e3a5f">
+  <meta name="description" content="DSE Stock Analytics - Track Dar es Salaam Stock Exchange">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DSE Stocks">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192x192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <title>DSE Stock Analytics</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1e3a5f;
+    }
+
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+
+    .loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-logo {
+      width: 80px;
+      height: 80px;
+      background: #ffffff;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .loading-text {
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .app-container {
+      position: fixed;
+      top: env(safe-area-inset-top);
+      left: 0;
+      right: 0;
+      bottom: env(safe-area-inset-bottom);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: #1e3a5f;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 56px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 100;
+    }
+
+    .header-icon {
+      width: 40px;
+      height: 40px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .header-text {
+      flex: 1;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .header-subtitle {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .install-btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: none;
+    }
+
+    .install-btn.show {
+      display: block;
+    }
+
+    .install-btn:active {
+      transform: scale(0.95);
+    }
+
+    .iframe-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .iframe-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      transform: translateZ(0);
+    }
+
+    .status-bar {
+      background: #152d4a;
+      color: rgba(255,255,255,0.7);
+      padding: 8px 16px;
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4CAF50;
+    }
+
+    .status-dot.offline {
+      background: #f44336;
+    }
+
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .offline-banner {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      background: #f44336;
+      color: white;
+      padding: 8px 16px;
+      text-align: center;
+      font-size: 12px;
+      z-index: 200;
+      display: none;
+    }
+
+    .offline-banner.show {
+      display: block;
+    }
+
+    .menu-btn {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px;
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .menu-btn {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="loading-logo">📈</div>
+    <div class="loading-text">DSE Stock Analytics</div>
+    <div class="loading-spinner"></div>
+  </div>
+
+  <div class="offline-banner" id="offlineBanner">
+    You're offline. Showing cached data.
+  </div>
+
+  <div class="app-container">
+    <div class="header">
+      <div class="header-icon">📈</div>
+      <div class="header-text">
+        <div class="header-title">DSE Stock Analytics</div>
+        <div class="header-subtitle">Dar es Salaam Stock Exchange</div>
+      </div>
+      <button class="install-btn" id="installBtn" onclick="installApp()">
+        Install
+      </button>
+    </div>
+
+    <div class="iframe-container">
+      <iframe
+        id="appFrame"
+        src="http://localhost:8501"
+        allow="clipboard-read; clipboard-write"
+        title="DSE Dashboard"
+      ></iframe>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-indicator">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <button class="refresh-btn" onclick="refreshApp()">Refresh</button>
+    </div>
+  </div>
+
+  <script>
+    const loading = document.getElementById('loading');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const offlineBanner = document.getElementById('offlineBanner');
+    const installBtn = document.getElementById('installBtn');
+    let deferredPrompt = null;
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then((reg) => console.log('SW registered'))
+        .catch((err) => console.log('SW registration failed:', err));
+    }
+
+    window.addEventListener('online', () => {
+      statusDot.classList.remove('offline');
+      statusText.textContent = 'Connected';
+      offlineBanner.classList.remove('show');
+    });
+
+    window.addEventListener('offline', () => {
+      statusDot.classList.add('offline');
+      statusText.textContent = 'Offline';
+      offlineBanner.classList.add('show');
+    });
+
+    if (!navigator.onLine) {
+      statusDot.classList.add('offline');
+      statusText.textContent = 'Offline';
+      offlineBanner.classList.add('show');
+    }
+
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        loading.classList.add('hidden');
+      }, 1500);
+    });
+
+    window.addEventListener('error', (e) => {
+      if (e.target.tagName === 'IFRAME') {
+        statusText.textContent = 'Connection failed';
+        statusDot.classList.add('offline');
+      }
+    });
+
+    window.addEventListener('unload', () => {
+      statusText.textContent = 'Disconnected';
+    });
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.classList.add('show');
+    });
+
+    function installApp() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            installBtn.classList.remove('show');
+          }
+          deferredPrompt = null;
+        });
+      }
+    }
+
+    function refreshApp() {
+      const iframe = document.getElementById('appFrame');
+      iframe.src = iframe.src;
+    }
+
+    setInterval(() => {
+      if (navigator.onLine) {
+        statusText.textContent = 'Connected';
+        statusDot.classList.remove('offline');
+      }
+    }, 5000);
+  </script>
+</body>
+</html>

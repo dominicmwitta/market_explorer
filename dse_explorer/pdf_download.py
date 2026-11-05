@@ -1,15 +1,18 @@
 # pip install playwright
 # playwright install   # run once in terminal
 
+import base64
 import datetime
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from urllib.parse import urljoin
+
+from playwright.sync_api import sync_playwright
 
 # Config
 OUTPUT_DIR = Path("dse_reports")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-HOMEPAGE = "https://www.dse.co.tz/"
+HOMEPAGE = "https://dse.co.tz/"
 TODAY = datetime.date.today().strftime("%Y-%m-%d")
 PDF_FILENAME = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.pdf"
 PDF_TEMP = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.tmp.pdf"
@@ -42,8 +45,8 @@ def fetch_latest_dse_report():
 
         try:
             print("Step 1: Loading DSE homepage...")
-            page.goto(HOMEPAGE, wait_until="networkidle", timeout=60000)
-            page.wait_for_timeout(4000)
+            page.goto(HOMEPAGE, wait_until="load", timeout=30000)
+            page.wait_for_timeout(2000)
 
             print("Step 2: Locating latest Market Report 'View' link...")
             view_links = page.get_by_role("link", name="View", exact=True).all()
@@ -53,86 +56,59 @@ def fetch_latest_dse_report():
                 page.screenshot(path=str(DEBUG_SCREENSHOT))
                 return False
 
-            latest_view_link = view_links[0]
-            href = latest_view_link.get_attribute("href")
-            print(f"  Found link: {href}")
-
-            print("Step 3: Navigating to report...")
-
-            report_page = page
-            try:
-                with context.expect_page(timeout=5000) as new_page_info:
-                    latest_view_link.click()
-                report_page = new_page_info.value
-                report_page.wait_for_load_state("networkidle", timeout=30000)
-                print("  Report opened in new tab.")
-            except (PlaywrightTimeoutError, Exception):
-                page.wait_for_load_state("networkidle", timeout=30000)
-                print("  Report loaded on same page.")
-
-            report_page.wait_for_timeout(5000)
-
-            # Save screenshot for verification
-            report_page.screenshot(path=str(DEBUG_SCREENSHOT), full_page=True)
-            print(f"  Screenshot saved: {DEBUG_SCREENSHOT}")
-
-            print("Step 4: Removing anti-print protections...")
-            report_page.evaluate("""() => {
-                // Remove <style media="print"> tags that hide content
-                document.querySelectorAll('style[media="print"]').forEach(s => s.remove());
-
-                // Remove inline @media print rules from remaining stylesheets
-                for (const sheet of document.styleSheets) {
-                    try {
-                        const rules = sheet.cssRules || sheet.rules;
-                        for (let i = rules.length - 1; i >= 0; i--) {
-                            const rule = rules[i];
-                            if (rule.type === CSSRule.MEDIA_RULE &&
-                                rule.conditionText === 'print') {
-                                sheet.deleteRule(i);
-                            }
-                        }
-                    } catch(e) { /* cross-origin stylesheet, skip */ }
-                }
-
-                // Also remove the Ctrl+P blocking script effect
-                document.body.style.display = '';
-                document.body.style.visibility = 'visible';
-
-                // Make sure all page content boxes are visible for print
-                document.querySelectorAll('.pc').forEach(el => {
-                    el.style.display = 'block';
-                });
-            }""")
-
-            # Override with a permissive print style
-            report_page.add_style_tag(content="""
-                @media print {
-                    * { visibility: visible !important; }
-                    body { display: block !important; }
-                    .pf, .pc, .pi, #page-container { display: block !important; }
-                }
-            """)
-
-            print("Step 5: Generating PDF...")
-            report_page.pdf(
-                path=str(PDF_TEMP),
-                format="A4",
-                landscape=True,
-                print_background=True,
-                margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
-                scale=0.88,
-            )
-
-            size = PDF_TEMP.stat().st_size
-            if size < 5000:
-                print(f"  WARNING: PDF is only {size} bytes — may be empty.")
-                PDF_TEMP.unlink(missing_ok=True)
+            href = view_links[0].get_attribute("href")
+            if not href:
+                print("Error: 'View' link has no href.")
                 return False
 
+            report_url = urljoin(page.url, href)
+            report_id = report_url.rstrip("/").rsplit("/", 1)[-1]
+            print(f"  Found report: {report_url}")
+
+            # The daily report is now rendered as an embedded PDF viewer
+            # (Next.js app). Visiting the report page first establishes
+            # whatever session/referer state the API route checks, then we
+            # pull the original PDF straight from its API endpoint instead
+            # of re-rendering the page to PDF (which is lossy and was timing
+            # out on networkidle due to the SPA's background requests).
+            print("Step 3: Opening report page...")
+            page.goto(report_url, wait_until="load", timeout=30000)
+            page.wait_for_timeout(2000)
+
+            print("Step 4: Fetching source PDF via API...")
+            api_url = urljoin(report_url, f"/api/daily-report/{report_id}")
+            result = page.evaluate(
+                """async (url) => {
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        return {ok: false, status: res.status};
+                    }
+                    const buf = await res.arrayBuffer();
+                    const bytes = new Uint8Array(buf);
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    return {ok: true, data: btoa(binary)};
+                }""",
+                api_url,
+            )
+
+            if not result.get("ok"):
+                print(f"Error: PDF API returned status {result.get('status')}")
+                page.screenshot(path=str(DEBUG_SCREENSHOT))
+                return False
+
+            pdf_bytes = base64.b64decode(result["data"])
+
+            if len(pdf_bytes) < 5000:
+                print(f"  WARNING: PDF is only {len(pdf_bytes)} bytes — may be empty.")
+                return False
+
+            PDF_TEMP.write_bytes(pdf_bytes)
             # Atomic replace: temp -> final (overwrites even if locked)
             PDF_TEMP.replace(PDF_FILENAME)
-            print(f"Success! PDF saved -> {PDF_FILENAME} ({size:,} bytes)")
+            print(f"Success! PDF saved -> {PDF_FILENAME} ({len(pdf_bytes):,} bytes)")
             return True
 
         except Exception as e:
