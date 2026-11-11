@@ -9,6 +9,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from psycopg2.extras import execute_values
@@ -129,10 +130,13 @@ def upsert_prices(engine: Engine, df: pd.DataFrame, source: str | None = None) -
     df = df[DAILY_PRICES_COLUMNS]
     df = df.where(pd.notna(df), None)
     # psycopg2 has no adapter for numpy scalar types (e.g. numpy.int64 from the
-    # nullable Int64 "deals" column), so coerce everything to plain Python types.
+    # PDF extractor's integer columns), so coerce everything to plain Python types.
     df["deals"] = df["deals"].map(lambda v: int(v) if v is not None else None)
 
-    rows = list(df.itertuples(index=False, name=None))
+    rows = [
+        tuple(v.item() if isinstance(v, np.generic) else v for v in row)
+        for row in df.itertuples(index=False, name=None)
+    ]
     if not rows:
         return 0
     columns = ", ".join(DAILY_PRICES_COLUMNS)
