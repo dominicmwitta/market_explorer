@@ -1,25 +1,66 @@
 # pip install playwright
 # playwright install   # run once in terminal
 
+"""Download the latest DSE Daily Market Report PDF.
+
+The DSE site (redesigned Nov 2026) links each report as
+"Daily Market Report <date>" -> /en/resources/research/investment-insights/<id>.
+That page loads the real PDF from /api/daily-report/<id>, which only answers
+requests made from the page itself (direct requests get 403), so we open the
+page in a browser and save the PDF response it receives.
+"""
+
 import datetime
+import re
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+from playwright.sync_api import sync_playwright
 
 # Config
 OUTPUT_DIR = Path("dse_reports")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-HOMEPAGE = "https://www.dse.co.tz/"
+HOMEPAGE = "https://dse.co.tz/en"
+REPORTS_PAGE = "https://dse.co.tz/en/resources/research/investment-insights"
 TODAY = datetime.date.today().strftime("%Y-%m-%d")
 PDF_FILENAME = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.pdf"
 PDF_TEMP = OUTPUT_DIR / f"DSE_Daily_Report_{TODAY}.tmp.pdf"
 DEBUG_SCREENSHOT = OUTPUT_DIR / f"debug_{TODAY}.png"
 
+_REPORT_LINK_RE = re.compile(r"Daily Market Report\s+(.+)", re.I)
+
+
+def _parse_link_date(text):
+    """Parse the date in a link like 'Daily Market Report 10 Nov 2026'."""
+    m = _REPORT_LINK_RE.search(text)
+    if not m:
+        return None
+    date_text = " ".join(m.group(1).split())
+    for fmt in ("%d %b %Y", "%d %B %Y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.datetime.strptime(date_text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _find_latest_report_url(page):
+    """Return (date, absolute URL) of the newest daily report linked on the page."""
+    links = page.eval_on_selector_all(
+        "a[href*='/investment-insights/']",
+        "els => els.map(a => [a.innerText, a.href])",
+    )
+    dated = []
+    for text, href in links:
+        d = _parse_link_date(text)
+        if d:
+            dated.append((d, href))
+    return max(dated) if dated else None
+
 
 def fetch_latest_dse_report():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-
         context = browser.new_context(
             viewport={"width": 1440, "height": 900},
             user_agent=(
@@ -31,108 +72,43 @@ def fetch_latest_dse_report():
             timezone_id="Africa/Dar_es_Salaam",
             ignore_https_errors=True,
         )
-
-        context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
-            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-        """)
-
         page = context.new_page()
 
         try:
-            print("Step 1: Loading DSE homepage...")
-            page.goto(HOMEPAGE, wait_until="networkidle", timeout=60000)
-            page.wait_for_timeout(4000)
+            latest = None
+            for url in (HOMEPAGE, REPORTS_PAGE):
+                print(f"Step 1: Looking for Daily Market Report links on {url}")
+                page.goto(url, wait_until="networkidle", timeout=60000)
+                latest = _find_latest_report_url(page)
+                if latest:
+                    break
 
-            print("Step 2: Locating latest Market Report 'View' link...")
-            view_links = page.get_by_role("link", name="View", exact=True).all()
-
-            if not view_links:
-                print("Error: No 'View' links found.")
-                page.screenshot(path=str(DEBUG_SCREENSHOT))
+            if not latest:
+                print("Error: No 'Daily Market Report' links found.")
+                page.screenshot(path=str(DEBUG_SCREENSHOT), full_page=True)
                 return False
 
-            latest_view_link = view_links[0]
-            href = latest_view_link.get_attribute("href")
-            print(f"  Found link: {href}")
+            report_date, report_url = latest
+            print(f"  Latest report: {report_date} -> {report_url}")
 
-            print("Step 3: Navigating to report...")
+            print("Step 2: Opening report page and capturing the PDF...")
+            with page.expect_response(
+                lambda r: "/api/daily-report/" in r.url
+                and r.status == 200
+                and "application/pdf" in r.headers.get("content-type", ""),
+                timeout=60000,
+            ) as resp_info:
+                page.goto(report_url, wait_until="domcontentloaded", timeout=60000)
+            pdf_bytes = resp_info.value.body()
 
-            report_page = page
-            try:
-                with context.expect_page(timeout=5000) as new_page_info:
-                    latest_view_link.click()
-                report_page = new_page_info.value
-                report_page.wait_for_load_state("networkidle", timeout=30000)
-                print("  Report opened in new tab.")
-            except (PlaywrightTimeoutError, Exception):
-                page.wait_for_load_state("networkidle", timeout=30000)
-                print("  Report loaded on same page.")
-
-            report_page.wait_for_timeout(5000)
-
-            # Save screenshot for verification
-            report_page.screenshot(path=str(DEBUG_SCREENSHOT), full_page=True)
-            print(f"  Screenshot saved: {DEBUG_SCREENSHOT}")
-
-            print("Step 4: Removing anti-print protections...")
-            report_page.evaluate("""() => {
-                // Remove <style media="print"> tags that hide content
-                document.querySelectorAll('style[media="print"]').forEach(s => s.remove());
-
-                // Remove inline @media print rules from remaining stylesheets
-                for (const sheet of document.styleSheets) {
-                    try {
-                        const rules = sheet.cssRules || sheet.rules;
-                        for (let i = rules.length - 1; i >= 0; i--) {
-                            const rule = rules[i];
-                            if (rule.type === CSSRule.MEDIA_RULE &&
-                                rule.conditionText === 'print') {
-                                sheet.deleteRule(i);
-                            }
-                        }
-                    } catch(e) { /* cross-origin stylesheet, skip */ }
-                }
-
-                // Also remove the Ctrl+P blocking script effect
-                document.body.style.display = '';
-                document.body.style.visibility = 'visible';
-
-                // Make sure all page content boxes are visible for print
-                document.querySelectorAll('.pc').forEach(el => {
-                    el.style.display = 'block';
-                });
-            }""")
-
-            # Override with a permissive print style
-            report_page.add_style_tag(content="""
-                @media print {
-                    * { visibility: visible !important; }
-                    body { display: block !important; }
-                    .pf, .pc, .pi, #page-container { display: block !important; }
-                }
-            """)
-
-            print("Step 5: Generating PDF...")
-            report_page.pdf(
-                path=str(PDF_TEMP),
-                format="A4",
-                landscape=True,
-                print_background=True,
-                margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
-                scale=0.88,
-            )
-
-            size = PDF_TEMP.stat().st_size
-            if size < 5000:
-                print(f"  WARNING: PDF is only {size} bytes — may be empty.")
-                PDF_TEMP.unlink(missing_ok=True)
+            if len(pdf_bytes) < 5000 or not pdf_bytes.startswith(b"%PDF"):
+                print(f"  WARNING: response is not a valid PDF ({len(pdf_bytes)} bytes).")
                 return False
 
+            PDF_TEMP.write_bytes(pdf_bytes)
             # Atomic replace: temp -> final (overwrites even if locked)
             PDF_TEMP.replace(PDF_FILENAME)
-            print(f"Success! PDF saved -> {PDF_FILENAME} ({size:,} bytes)")
+            print(f"Success! PDF saved -> {PDF_FILENAME} ({len(pdf_bytes):,} bytes)")
             return True
 
         except Exception as e:

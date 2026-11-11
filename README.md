@@ -1,14 +1,13 @@
 # DSE Explorer
 
-Scraper and analytics toolkit for the **Dar es Salaam Stock Exchange (DSE)**.
-Collects daily equity and ETF price data from the DSE website, extracts data from PDF market reports, and provides analysis tools and an interactive dashboard.
+Data pipeline and analytics toolkit for the **Dar es Salaam Stock Exchange (DSE)**.
+Collects daily equity and ETF price data from the official DSE daily market report PDFs and provides analysis tools and an interactive dashboard.
 
 ## What it does
 
-- **Web scraping** - Fetches daily equity price reports from [dse.co.tz](https://dse.co.tz/) using Playwright (JavaScript rendering) with a requests fallback.
-- **PDF download** - Automates browser-based download of the official DSE daily market report PDF, bypassing anti-print protections.
+- **PDF download** - Opens the latest daily market report on [dse.co.tz](https://dse.co.tz/) in a headless browser (Playwright) and saves the PDF.
 - **PDF extraction** - Parses downloaded PDF reports with pdfplumber to extract equity and ETF daily prices into CSV.
-- **Daily pipeline** - Runs the full workflow (scrape + PDF download + extract + compare + merge) in one command, deduplicating against existing data.
+- **Daily pipeline** - Runs the full workflow (PDF download + extract + upsert into Postgres + alerts) in one command.
 - **Stock analysis** - Calculates performance metrics (returns, volatility, Sharpe ratio, momentum, liquidity) and generates a text report.
 - **Technical indicators** - SMA, EMA, RSI, MACD, and Bollinger Bands computed per stock.
 - **Order book analysis** - Bid/offer ratio and buy/sell pressure categorization.
@@ -20,7 +19,6 @@ Collects daily equity and ETF price data from the DSE website, extracts data fro
 - **Watchlist** - Personal stock watchlist stored as JSON with CLI management.
 - **Price alerts** - Configurable above/below price alerts with automatic checking in the pipeline.
 - **Excel export** - Multi-sheet Excel report (openpyxl).
-- **Historical backfill** - Scrape all available report URLs to build a complete dataset.
 - **Automated scheduling** - Windows Task Scheduler integration for daily pipeline runs.
 - **Interactive dashboard** - Streamlit web app with 9 tabs: Performance, Price Trends, Returns Analysis, Volume Analysis, Stock Comparison, Technical Analysis, Market Intelligence, Sector Analysis, and Backtesting.
 
@@ -70,29 +68,11 @@ pip uninstall dse-explorer
 
 ## Usage
 
-After installation, twelve CLI commands are available:
-
-### dse-scrape
-
-Scrape equity data from the DSE website.
-
-```bash
-# List available daily report URLs
-dse-scrape --list
-
-# Scrape the latest report
-dse-scrape
-
-# Scrape a specific report URL
-dse-scrape --url <report-url>
-
-# Specify output file
-dse-scrape --output my_data.csv
-```
+After installation, these CLI commands are available:
 
 ### dse-pipeline
 
-Run the full daily pipeline: web scrape, PDF download, PDF extraction, source comparison, merge into master CSV, and check price alerts.
+Run the full daily pipeline: PDF download, PDF extraction, upsert into the database, and check price alerts.
 
 ```bash
 dse-pipeline
@@ -187,18 +167,6 @@ dse-alerts --remove 0
 
 Alerts are stored in `alerts.json`. They are also checked automatically at the end of `dse-pipeline`.
 
-### dse-backfill
-
-Scrape all available historical report URLs to build a complete dataset.
-
-```bash
-# Backfill to default output file
-dse-backfill
-
-# Backfill to a custom file
-dse-backfill --output historical.csv
-```
-
 ### dse-schedule
 
 Set up automated daily pipeline runs using Windows Task Scheduler.
@@ -234,16 +202,13 @@ dse-backtest --data my_data.csv
 
 ### dse-create-shortcuts
 
-Create Windows desktop shortcuts for quick access to the Dashboard and Scraper.
+Create a Windows desktop shortcut for quick access to the Dashboard.
 
 ```bash
 dse-create-shortcuts
 ```
 
-This places two shortcuts on your Desktop:
-
-- **DSE Dashboard** - launches the Streamlit dashboard
-- **DSE Scraper** - runs the market data scraper
+This places a **DSE Dashboard** shortcut on your Desktop that launches the Streamlit dashboard.
 
 ## Dashboard tabs
 
@@ -269,11 +234,7 @@ market_explorer/
   dse_explorer/
     __init__.py           # Package exports
     config.py             # Constants, sector map, company names
-    scraper.py            # HTTP fetching (Playwright + requests)
-    parser.py             # HTML parsing and anti-scraping CSS handling
     data.py               # DataFrame operations and CSV output
-    main.py               # Single-report scraper CLI
-    scrape.py             # Batch scraper (all reports)
     pipeline.py           # Daily pipeline orchestrator
     pdf_download.py       # Browser-based PDF downloader
     pdf_extract.py        # PDF-to-CSV extractor
@@ -282,7 +243,6 @@ market_explorer/
     watchlist.py          # Watchlist management (JSON + CLI)
     alerts.py             # Price alerts (JSON + CLI + checking)
     backtest.py           # Momentum backtesting engine
-    backfill.py           # Historical data backfill
     scheduler.py          # Windows Task Scheduler integration
     dashboard.py          # Streamlit interactive dashboard (9 tabs)
     shortcuts.py          # Windows desktop shortcut creator
@@ -293,7 +253,7 @@ market_explorer/
 
 | File | Description |
 |------|-------------|
-| `dse_equity_daily.csv` | Master CSV with all scraped daily equity data |
+| `dse_equity_daily.csv` | Historical equity data (one-time source for `dse-db-migrate`) |
 | `dse_reports/*.pdf` | Downloaded DSE daily market report PDFs |
 | `reports/dse_equity_*.csv` | Per-date CSVs extracted from PDF reports |
 | `logs/dse_explorer_*.log` | Daily log files |

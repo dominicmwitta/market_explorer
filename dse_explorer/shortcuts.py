@@ -12,11 +12,6 @@ SHORTCUTS = [
         "target": "dse-dashboard",
         "description": "Launch the DSE Stock Analytics Dashboard",
     },
-    {
-        "name": "DSE Scraper",
-        "target": "dse-scrape",
-        "description": "Run the DSE market data scraper",
-    },
 ]
 
 

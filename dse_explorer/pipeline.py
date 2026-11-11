@@ -1,12 +1,9 @@
-"""Composed DSE data pipeline: scraper -> PDF fallback -> compare -> merge."""
+"""DSE daily pipeline: download the daily report PDF -> extract -> save to Postgres."""
 
 import difflib
 
-import pandas as pd
-
 from dse_explorer.config import SECTOR_MAP
 from dse_explorer.logger import get_logger
-from dse_explorer.equity_scraper import scrape_equity_table
 from dse_explorer.pdf_extract import extract_equity_prices
 
 # Canonical names: map old/alternate ticker names to current DSE names (real
@@ -79,85 +76,15 @@ def _normalize_companies(df):
     return df
 
 
-COMPARE_COLUMNS = [
-    "Opening_Price", "Closing_Price", "High", "Low",
-    "Turnover", "Deals", "Outstanding_Bids", "Outstanding_Offers",
-    "Volume", "Market_Cap",
-]
-
 log = get_logger()
 
 
 # ------------------------------------------------------------------
-# Step 0: Equity Table (fastest — plain HTML table on homepage)
-# ------------------------------------------------------------------
-def try_equity_table():
-    """Scrape today's data from the #equity table on the DSE homepage."""
-    log.info("--- Step 0: Equity Table ---")
-    try:
-        df = scrape_equity_table()
-        if df is None or df.empty:
-            log.warning("Equity table: no data extracted")
-            return None
-        log.info(f"Equity table: extracted {len(df)} rows")
-        return df
-    except Exception as e:
-        log.exception(f"Equity table failed: {e}")
-        return None
-
-
-# ------------------------------------------------------------------
-# Step 1: Web Scraper
-# ------------------------------------------------------------------
-SCRAPER_TIMEOUT = 120  # seconds before giving up on the scraper
-
-
-def _run_scraper():
-    """Inner scraper logic (runs inside thread for timeout control)."""
-    from dse_explorer import get_homepage, find_daily_report_urls
-    from dse_explorer.scraper import close_browser
-    from dse_explorer.scrape import scrape_report
-
-    try:
-        soup = get_homepage()
-        if not soup:
-            log.warning("Scraper: failed to fetch DSE homepage")
-            return None
-
-        urls = find_daily_report_urls(soup)
-        if not urls:
-            log.warning("Scraper: no daily report URLs found")
-            return None
-
-        log.info(f"Scraper: found {len(urls)} report(s), using latest")
-        df = scrape_report(urls[0])
-        if df is None or df.empty:
-            log.warning("Scraper: returned empty data")
-            return None
-
-        log.info(f"Scraper: extracted {len(df)} rows")
-        return df
-
-    except Exception as e:
-        log.exception(f"Scraper failed: {e}")
-        return None
-
-    finally:
-        close_browser()
-
-
-def try_scraper():
-    """Attempt to scrape today's data from the DSE website."""
-    log.info("--- Step 1: Web Scraper ---")
-    return _run_scraper()
-
-
-# ------------------------------------------------------------------
-# Step 2: PDF Extraction
+# Step 1: PDF Extraction
 # ------------------------------------------------------------------
 def try_pdf():
     """Download and extract today's PDF report."""
-    log.info("--- Step 2: PDF Extraction ---")
+    log.info("--- Step 1: PDF Extraction ---")
     try:
         from dse_explorer.pdf_download import fetch_latest_dse_report
 
@@ -180,90 +107,11 @@ def try_pdf():
 
 
 # ------------------------------------------------------------------
-# Step 3: Compare & Merge
-# ------------------------------------------------------------------
-def compare_sources(scraper_df, pdf_df):
-    """Compare row-by-row and log mismatches. Returns merged DataFrame."""
-    log.info("--- Step 3: Comparing Sources ---")
-
-    scraper_companies = set(scraper_df["Company"])
-    pdf_companies = set(pdf_df["Company"])
-
-    common = scraper_companies & pdf_companies
-    only_scraper = scraper_companies - pdf_companies
-    only_pdf = pdf_companies - scraper_companies
-
-    if only_scraper:
-        log.info(f"Companies only in scraper: {sorted(only_scraper)}")
-    if only_pdf:
-        log.info(f"Companies only in PDF: {sorted(only_pdf)}")
-
-    mismatches = 0
-    for company in sorted(common):
-        s_row = scraper_df[scraper_df["Company"] == company].iloc[0]
-        p_row = pdf_df[pdf_df["Company"] == company].iloc[0]
-
-        for col in COMPARE_COLUMNS:
-            s_val = s_row[col]
-            p_val = p_row[col]
-            if s_val != p_val:
-                log.warning(
-                    f"  {company} {col}: scraper={s_val} vs pdf={p_val} MISMATCH"
-                )
-                mismatches += 1
-
-    if mismatches == 0:
-        log.info(f"All {len(common)} common companies match perfectly")
-    else:
-        log.warning(f"{mismatches} value mismatches across {len(common)} companies")
-
-    # Prefer PDF; supplement with scraper-only companies
-    if only_scraper:
-        extra = scraper_df[scraper_df["Company"].isin(only_scraper)]
-        merged = pd.concat([pdf_df, extra], ignore_index=True)
-    else:
-        merged = pdf_df.copy()
-
-    return merged
-
-
-def pick_best(equity_df, scraper_df, pdf_df):
-    """Choose or merge data from whichever sources succeeded.
-
-    Priority: equity table > PDF > scraper (for compare/merge logic,
-    the equity table is treated like the scraper result when both it
-    and PDF are available).
-    """
-    # If equity table succeeded, use it as the primary web source
-    web_df = equity_df if equity_df is not None else scraper_df
-
-    # Normalize ticker names so PDF and web sources match
-    web_df = _normalize_companies(web_df)
-    pdf_df = _normalize_companies(pdf_df)
-
-    both = web_df is not None and pdf_df is not None
-    web_only = web_df is not None and pdf_df is None
-    pdf_only = pdf_df is not None and web_df is None
-
-    if both:
-        return compare_sources(web_df, pdf_df)
-    elif pdf_only:
-        log.info("Using PDF data (web sources unavailable)")
-        return pdf_df
-    elif web_only:
-        log.info("Using web data (PDF unavailable)")
-        return web_df
-    else:
-        log.error("All sources failed — no data to save")
-        return None
-
-
-# ------------------------------------------------------------------
-# Step 4: Update Master Database
+# Step 2: Update Master Database
 # ------------------------------------------------------------------
 def update_master_db(new_df, source: str):
     """Upsert today's rows into Postgres and return the full active history."""
-    log.info("--- Step 4: Updating Master Database ---")
+    log.info("--- Step 2: Updating Master Database ---")
 
     from dse_explorer.db import (
         create_schema, get_engine, read_daily_prices, upsert_companies, upsert_prices,
@@ -291,36 +139,12 @@ def main():
     log.info("=" * 60)
 
     errors = []
-    source = "none"
+    source = "PDF"
 
-    # Step 0 — fastest path: plain HTML table
-    equity_df = try_equity_table()
-
-    # Step 1 — full-page scraper (only if equity table missed)
-    scraper_df = None
-    if equity_df is None:
-        scraper_df = try_scraper()
-
-    # Close Playwright from prior steps so pdf_download can start its own
-    from dse_explorer.scraper import close_browser
-    close_browser()
-
-    # Step 2 — PDF fallback
-    pdf_df = try_pdf()
-
-    # Determine which source label to report
-    web_df = equity_df if equity_df is not None else scraper_df
-    if web_df is not None and pdf_df is not None:
-        source = ("equity-table" if equity_df is not None else "scraper") + "+PDF"
-    elif web_df is not None:
-        source = "equity-table" if equity_df is not None else "scraper"
-    elif pdf_df is not None:
-        source = "PDF"
-    else:
-        errors.append("All sources (equity table, scraper, PDF) failed")
-
-    result = pick_best(equity_df, scraper_df, pdf_df)
+    result = try_pdf()
     if result is None:
+        errors.append("PDF download/extraction failed")
+        log.error("No data to save")
         # Notify failure and exit
         try:
             from dse_explorer.notifier import notify_pipeline_result
@@ -332,7 +156,8 @@ def main():
             })
         except Exception as e:
             log.debug(f"Email notification skipped: {e}")
-        return
+        # Non-zero exit so the scheduled run shows as failed and logs are uploaded
+        raise SystemExit(1)
 
     rows_scraped = len(result)
     final = update_master_db(result, source=source)
