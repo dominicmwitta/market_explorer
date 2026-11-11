@@ -6,7 +6,7 @@ COMPANY_NAMES = [
     'AFRIPRISE', 'CRDB', 'DCB', 'DSE', 'EABL', 'JATU', 'JHL', 'KA', 'KCB',
     'MBP', 'MCB', 'MKCB', 'MUCOBA', 'NICO', 'NMB', 'NMG', 'PAL', 'SWALA',
     'SWIS', 'TBL', 'TCC', 'TCCL', 'TOL', 'TPCC', 'TTP', 'USL', 'VODA', 'YETU',
-    'ITRUST ETF', 'VERTEX ETF'
+    'ITRUST ETF', 'VERTEX ETF', 'ZAN TIMIZA ETF'
 ]
 
 COLUMN_NAMES = [
@@ -31,7 +31,7 @@ SECTOR_MAP = {
     "Media": ["NMG"],  # Nation Media Group
     "Retail": ["USL"],  # Uchumi Supermarkets
     "Agriculture": ["JATU"],
-    "ETFs": ["ITRUST ETF", "VERTEX ETF"],
+    "ETFs": ["ITRUST ETF", "VERTEX ETF", "ZAN TIMIZA ETF"],
 }
 
 

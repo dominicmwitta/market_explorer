@@ -16,7 +16,7 @@ from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, make_url
 
-from dse_explorer.config import SECTOR_MAP, EXCLUDED_TICKERS, get_sector, get_full_name
+from dse_explorer.config import EXCLUDED_TICKERS, get_sector, get_full_name
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -83,16 +83,11 @@ def upsert_companies(engine: Engine, tickers: set[str], sync_known: bool = False
     With sync_known=True (used by the one-time backfill), tickers found in
     SECTOR_MAP have their sector/active flag re-synced from config on every
     call. Otherwise (the daily pipeline path) existing rows are left alone —
-    only brand-new tickers get inserted — so a manual `active` toggle in the
-    database isn't silently overwritten by the next scrape.
+    only missing tickers get inserted, and 'Unknown' sectors filled in once
+    config knows them — so a manual `active` toggle in the database isn't
+    silently overwritten by the next scrape.
     """
-    known = {t for tickers_ in SECTOR_MAP.values() for t in tickers_}
     rows = [(t, get_sector(t), t not in EXCLUDED_TICKERS, get_full_name(t)) for t in tickers]
-
-    conflict_clause = (
-        "DO UPDATE SET sector = EXCLUDED.sector, active = EXCLUDED.active, full_name = EXCLUDED.full_name"
-        if sync_known else "DO NOTHING"
-    )
 
     with engine.begin() as conn:
         raw = conn.connection
@@ -100,26 +95,29 @@ def upsert_companies(engine: Engine, tickers: set[str], sync_known: bool = False
             if sync_known:
                 execute_values(
                     cur,
-                    f"""
+                    """
                     INSERT INTO companies (ticker, sector, active, full_name)
                     VALUES %s
-                    ON CONFLICT (ticker) {conflict_clause}
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        sector = EXCLUDED.sector, active = EXCLUDED.active, full_name = EXCLUDED.full_name
                     """,
                     rows,
                 )
             else:
-                # Only insert tickers that aren't already known/seeded.
-                new_rows = [r for r in rows if r[0] not in known]
-                if new_rows:
-                    execute_values(
-                        cur,
-                        f"""
-                        INSERT INTO companies (ticker, sector, active, full_name)
-                        VALUES %s
-                        ON CONFLICT (ticker) {conflict_clause}
-                        """,
-                        new_rows,
-                    )
+                # Insert missing tickers. Existing rows are left alone, except a
+                # ticker first stored as 'Unknown' that config now knows (e.g. a
+                # new listing added to SECTOR_MAP later) gets its sector/name filled in.
+                execute_values(
+                    cur,
+                    """
+                    INSERT INTO companies (ticker, sector, active, full_name)
+                    VALUES %s
+                    ON CONFLICT (ticker) DO UPDATE SET
+                        sector = EXCLUDED.sector, full_name = EXCLUDED.full_name
+                    WHERE companies.sector = 'Unknown' AND EXCLUDED.sector <> 'Unknown'
+                    """,
+                    rows,
+                )
 
 
 def upsert_prices(engine: Engine, df: pd.DataFrame, source: str | None = None) -> int:
