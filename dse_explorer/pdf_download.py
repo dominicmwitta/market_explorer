@@ -78,7 +78,16 @@ def fetch_latest_dse_report():
             latest = None
             for url in (HOMEPAGE, REPORTS_PAGE):
                 print(f"Step 1: Looking for Daily Market Report links on {url}")
-                page.goto(url, wait_until="networkidle", timeout=60000)
+                # The homepage keeps background requests open, so "networkidle"
+                # never fires; wait for the report links to render instead.
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                    page.wait_for_selector(
+                        "a[href*='/investment-insights/']", timeout=30000
+                    )
+                except Exception as e:
+                    print(f"  Could not load links from {url}: {e}")
+                    continue
                 latest = _find_latest_report_url(page)
                 if latest:
                     break
